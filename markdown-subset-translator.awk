@@ -3,10 +3,12 @@
 BEGIN {
     prev_line = ""
     inside_paragraph = 0
+    inside_pre = 0
 }
 
 {
-    # print "START: prev_line =", prev_line, "now_line =", $0
+    # print "START: prev_line =", prev_line
+    # print "now_line =", $0
 }
 
 # 見出し処理
@@ -69,8 +71,35 @@ $0 ~ /^\|/ {
     next
 }
 
+# <pre>タグ処理
+$0 ~ /^```$/ {
+    if (inside_pre) {
+        print "</pre>"
+        inside_pre = 0
+    } else {
+        print "<pre>"
+        inside_pre = 1
+    }
+    prev_line = $0
+    next
+}
+
+$0 == "" {
+    if (inside_paragraph) {
+        print "</p>"
+        inside_paragraph = 0
+        prev_line = $0
+        next
+    }
+}
+
 # 段落処理・末尾処理
 {
+    if (inside_pre) { 
+        print
+        prev_line = $0
+        next
+    }
     if ((prev_line ~ /^[\*+\-] /) && ($0 !~ /^[\*+\-]/)) { 
         print "</ul>"
         prev_line = $0
@@ -93,26 +122,23 @@ $0 ~ /^\|/ {
         next
     }
 
-    if (($0 == "") && inside_paragraph == 1) {
-        print "</p>"
-        inside_paragraph = 0
-        prev_line = $0
-        next
-    }
-
     if (prev_line == "") {
         now_line = $0
         getline
         if ($0 ~ /^={1,}$/) { print "<h1>"now_line"</h1>" }
         else if ($0 ~ /^-{1,}$/) { print "<h2>"now_line"</h2>" }
         else {
+            if (inside_paragraph) {
+                print "</p>"
+            }
             print "<p>"
             inside_paragraph = 1
             print now_line
+            if ($0 != "" && $0 !~ /^[*+\-]/ && $0 !~ /^[0-9]{1,}\. /) { print }
         }
     }
 
-    if (prev_line != "") {
+    if (prev_line != "" && prev_line !~ /```/) {
         print prev_line
     }
 
