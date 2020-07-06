@@ -38,20 +38,14 @@ $0 ~ /^#{1,6}/ {
 
 # 箇条書き処理
 $0 ~ /^[\*+\-]/ {
-    if (inside_paragraph) {
-        inside_paragraph = 0
-        print "</p>"
-        print "<ul>"
+    line = $0
+    li_str = ""
 
-        li_str = make_li_str(prev_line)
-        print "<li>"li_str"</li>"
+    while (getline && ($0 ~ /^ *[\*+\-]/)) {
+        line = line"\n"$0
     }
-
-    if (prev_line !~ /^[*+\-]/) { print "<ul>" }
-
-    li_str = make_li_str($0)
-    print "<li>"li_str"</li>"
-    prev_line = $0
+    li_str = make_li_str(0, line)
+    printf li_str
     next
 }
 
@@ -147,17 +141,33 @@ $0 == "" {
 
 END {
     if (inside_paragraph == 1) { print "</p>" }
+    print ""
 }
 
-function make_li_str(line) {
-    temp_array_length = split(line, temp_array, / /)
+function make_li_str(level, lines,   li_str,subline,i,count,temp_array) {
+    count = split(lines, temp_array, /\n/)
 
-    if (temp_array_length >= 2) {
-        li_str = temp_array[2]
-        for (i = 3; i <= temp_array_length; i++) { li_str = li_str" "temp_array[i] }
-    } else {
-        li_str = ""
+    content_start = match(temp_array[1], /[^\*+\- ]/)
+    li_str = "<li>"substr(temp_array[1] , content_start, length(temp_array[1]))
+    for (i = 2; i <= count; i++) {
+        num = (match(temp_array[i], /[\*+\-]/) - 1) / 4
+        if (num == level) {
+            content_start = match(temp_array[i], /[^\*+\- ]/)
+            li_str = li_str"</li>\n<li>"substr(temp_array[i] , content_start, length(temp_array[i]))
+        }
+
+        else if (num > level) {
+            subline = ""
+            num2 = (match(temp_array[i], /[\*+\-]/) - 1) / 4
+            while (num2 > level) {
+                subline = subline temp_array[i++]"\n"
+                num2 = (match(temp_array[i], /[\*+\-]/) - 1) / 4
+            }
+            li_str = li_str"\n<ul>\n"make_li_str(level + 1, subline)"\n</ul>\n"
+            i--
+        }
     }
+    li_str = li_str"</li>"
 
     return li_str
 }
