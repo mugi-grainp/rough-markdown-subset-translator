@@ -143,6 +143,7 @@ $0 == "" {
     if (prev_line == "") {
         now_line = $0
         getline
+
         if ($0 ~ /^={1,}$/) { print "<h1>"now_line"</h1>" }
         else if ($0 ~ /^-{1,}$/) { print "<h2>"now_line"</h2>" }
         else {
@@ -152,11 +153,13 @@ $0 == "" {
             print "<p>"
             inside_paragraph = 1
             print now_line
-            if ($0 != "" && $0 !~ /^[*+\-]/ && $0 !~ /^[0-9]{1,}\. /) { print }
-        }
-    }
 
-    if (prev_line != "" && prev_line !~ /```/) {
+            if ($0 != "" && $0 !~ /^[*+\-]/ && $0 !~ /^[0-9]{1,}\. /) {
+                print
+                getline
+            }
+        }
+    } else if (prev_line !~ /```/) {
         print prev_line
     }
 
@@ -164,7 +167,10 @@ $0 == "" {
 }
 
 END {
-    if (inside_paragraph == 1) { print "</p>" }
+    if (inside_paragraph == 1) {
+        print
+        print "</p>"
+    }
     print ""
 }
 
