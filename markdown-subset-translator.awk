@@ -137,33 +137,6 @@ function parse_main(prev_l, now_l, next_l) {
             }
         }
 
-        else if (now_l ~ /^[\*+\-]/) {
-            if (prev_l !~ /^[\*+\-]/) {
-                print "<ul>" 
-                block = 3
-            }
-            split(now_l, tmp, / {1,}/)
-            lstr = ""
-            for (i = 2; i <= length(tmp); i++) {
-                lstr = lstr tmp[i]
-            }
-            print "<li>" lstr "</li>"
-        }
-
-
-        else if (now_l ~ /^[0-9]{1,}\./) {
-            if (prev_l !~ /^[0-9]{1,}\./) {
-                print "<ol>" 
-                block = 4
-            }
-            split(now_l, tmp, / {1,}/)
-            lstr = ""
-            for (i = 2; i <= length(tmp); i++) {
-                lstr = lstr tmp[i]
-            }
-            print "<li>" lstr "</li>"
-        }
-
         # HTML ブロック要素はじまり
         else if (now_l ~ /<(address|article|aside|blockquote|details|dialog|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h.|header|hgroup|hr|li|main|nav|ol|p|pre|section|table|ul)>/) {
             block = 2
