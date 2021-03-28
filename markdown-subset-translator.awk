@@ -35,12 +35,8 @@ NR == 1 {
 }
 
 # 箇条書き処理
-$0 ~ /^[\*+\-] / {
-    prev_line = now_line
-    now_line  = next_line
-    next_line = $0
-
-    line = $0
+now_line ~ /^[\*+\-] / {
+    line = now_line "\n" next_line
     li_str = ""
 
     if (block == 1) {
@@ -65,12 +61,8 @@ $0 ~ /^[\*+\-] / {
 }
 
 # 順序リスト処理
-$0 ~ /^[0-9]{1,}\./ {
-    prev_line = now_line
-    now_line  = next_line
-    next_line = $0
-
-    line = $0
+now_line ~ /^[0-9]{1,}\. / {
+    line = now_line "\n" next_line
     li_str = ""
 
     if (block == 1) {
