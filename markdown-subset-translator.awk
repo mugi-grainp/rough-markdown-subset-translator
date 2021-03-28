@@ -1,52 +1,50 @@
 #!/usr/bin/awk -f
 
+# block
+#   -1  outside of the block
+#    0  inside of unknown block
+#    1  inside of paragraph block
+#    2  inside of HTML block
+#    3  inside of list (<ul>) block (not used)
+#    4  inside of list (<ol>) block (not used)
+
 BEGIN {
     prev_line = ""
-    inside_paragraph = 0
-    inside_pre = 0
+    now_line  = ""
+    next_line = ""
+    block  = 0
+    is_eof_after_list = 0
 }
 
+NR == 1 {
+    now_line = $0
+    getline next_line
+    $0 = next_line      # getlineは$0を設定しない。後処理の統一のためここで設定
+}
+
+# それ以外
 {
-    # print "START: prev_line =", prev_line
-    # print "now_line =", $0
-}
+    if (is_eof_after_list == 0) {
+        parse_main(prev_line, now_line, next_line)
+    }
 
-# 見出し処理
-$0 ~ /^={1,}$/ {
-    if (inside_paragraph) { inside_paragraph = 0; print "</p>" }
-    print "<h1>"prev_line"</h1>"
-    prev_line = $0
-    next
-}
-
-$0 ~ /^-{1,}$/ {
-    if (inside_paragraph) { inside_paragraph = 0; print "</p>" }
-    print "<h2>"prev_line"</h2>"
-    prev_line = $0
-    next
-}
-
-$0 ~ /^#{1,6}/ {
-    if (inside_paragraph) { inside_paragraph = 0; print "</p>" }
-    level = length($1)
-    hstr = $2
-    for (i = 3; i <= NF; i++) { hstr = hstr" "$i }
-    print "<h"level">"hstr"</h"level">"
-    prev_line = $0
-    next
+    prev_line = now_line
+    now_line  = next_line
+    next_line = $0
 }
 
 # 箇条書き処理
-$0 ~ /^[\*+\-]/ {
+$0 ~ /^[\*+\-] / {
+    prev_line = now_line
+    now_line  = next_line
+    next_line = $0
+
     line = $0
     li_str = ""
 
-    if (inside_paragraph) {
-        inside_paragraph = 0
+    if (block == 1) {
+        block = 3
         print "</p>"
-        print "<ul>"
-        li_str = make_li_str(0, prev_line, "ul")
-        print li_str
     }
 
     if (prev_line !~ /^[\*+\-]/) { print "<ul>" }
@@ -56,20 +54,27 @@ $0 ~ /^[\*+\-]/ {
     }
     li_str = make_li_str(0, line)
     print li_str"\n</ul>"
-    next
+    block = -1
+
+    prev_line = ""
+    now_line  = $0
+    ret = getline next_line
+    if (ret == 0) { is_eof_after_list = 1 }
+    $0 = next_line
 }
 
 # 順序リスト処理
 $0 ~ /^[0-9]{1,}\./ {
+    prev_line = now_line
+    now_line  = next_line
+    next_line = $0
+
     line = $0
     li_str = ""
 
-    if (inside_paragraph) {
-        inside_paragraph = 0
+    if (block == 1) {
+        block = 4
         print "</p>"
-        print "<ol>"
-        li_str = make_li_str_ol(0, prev_line)
-        print li_str
     }
 
     if (prev_line !~ /^[0-9]{1,}\./) { print "<ol>" }
@@ -79,99 +84,126 @@ $0 ~ /^[0-9]{1,}\./ {
     }
     li_str = make_li_str_ol(0, line)
     print li_str"\n</ol>"
-    next
-}
+    block = -1
 
-# テーブル処理（実装予定）
-$0 ~ /^\|/ {
-    print
-    prev_line = $0
-    next
-}
-
-# <pre>タグ処理
-$0 ~ /^```$/ {
-    if (inside_pre) {
-        print "</pre>"
-        inside_pre = 0
-    } else {
-        print "<pre>"
-        inside_pre = 1
-    }
-    prev_line = $0
-    next
-}
-
-$0 == "" {
-    if (inside_paragraph) {
-        print "</p>"
-        inside_paragraph = 0
-        prev_line = $0
-        next
-    }
-}
-
-# 段落処理・末尾処理
-{
-    if (inside_pre) { 
-        print
-        prev_line = $0
-        next
-    }
-    if ((prev_line ~ /^[\*+\-] /) && ($0 !~ /^[\*+\-]/)) { 
-        print "</ul>"
-        prev_line = $0
-        next
-    }
-
-    if ((prev_line ~ /^[0-9]{1,}\. /) && ($0 !~ /^[0-9]{1,}\. /)) {
-        print "</ol>"
-        prev_line = $0
-        next
-    }
-
-    if ((prev_line ~ /^={1,}$/) || (prev_line ~ /^-{1,}$/) || (prev_line ~ /^#{1,6}/)) {
-        if ($0 != "") {
-            print "<p>"
-            inside_paragraph = 1
-            print
-        }
-        prev_line = $0
-        next
-    }
-
-    if (prev_line == "") {
-        now_line = $0
-        getline
-
-        if ($0 ~ /^={1,}$/) { print "<h1>"now_line"</h1>" }
-        else if ($0 ~ /^-{1,}$/) { print "<h2>"now_line"</h2>" }
-        else {
-            if (inside_paragraph) {
-                print "</p>"
-            }
-            print "<p>"
-            inside_paragraph = 1
-            print now_line
-
-            if ($0 != "" && $0 !~ /^[*+\-]/ && $0 !~ /^[0-9]{1,}\. /) {
-                print
-                getline
-            }
-        }
-    } else if (prev_line !~ /```/) {
-        print prev_line
-    }
-
-    prev_line = $0
+    prev_line = ""
+    now_line  = $0
+    ret = getline next_line
+    if (ret == 0) { is_eof_after_list = 1 }
+    $0 = next_line
 }
 
 END {
-    if (inside_paragraph == 1) {
-        print
+    if (is_eof_after_list == 0) {
+        parse_main(prev_line, now_line, next_line)
+        parse_main(now_line, next_line, "")
+    }
+
+    if (block == 1) {
         print "</p>"
     }
-    print ""
+}
+
+function parse_main(prev_l, now_l, next_l) {
+    if ((block == 0) || (block == -1)) {
+        # 見出し #の数で表記
+        if (now_l ~ /^#{1,6}/) {
+            print make_header_str(now_l)
+        }
+
+        # 見出し H1
+        else if (next_l ~ /^={1,}$/) {
+            print "<h1>"now_l"</h1>"
+        }
+
+        # 見出し H1 を示す = は無視
+        else if (now_l ~ /^={1,}$/) {
+            return
+        }
+
+        # 見出し H2
+        else if (next_l ~ /^-{1,}$/) {
+            print "<h2>"now_l"</h2>"
+        }
+
+        # 見出し H2 を示す - は無視し、それ以外の - は3つ連続していれば区切り線
+        # また、後に文字が続けば箇条書きとみなす
+        else if (now_l ~ /^-{1,}$/) {
+            if (prev_l ~ /^[^\-]/) {
+                return
+            }
+            else if (now_l ~ /^-{3,}$/) {
+                print "<hr>"
+            }
+        }
+
+        else if (now_l ~ /^[\*+\-]/) {
+            if (prev_l !~ /^[\*+\-]/) {
+                print "<ul>" 
+                block = 3
+            }
+            split(now_l, tmp, / {1,}/)
+            lstr = ""
+            for (i = 2; i <= length(tmp); i++) {
+                lstr = lstr tmp[i]
+            }
+            print "<li>" lstr "</li>"
+        }
+
+
+        else if (now_l ~ /^[0-9]{1,}\./) {
+            if (prev_l !~ /^[0-9]{1,}\./) {
+                print "<ol>" 
+                block = 4
+            }
+            split(now_l, tmp, / {1,}/)
+            lstr = ""
+            for (i = 2; i <= length(tmp); i++) {
+                lstr = lstr tmp[i]
+            }
+            print "<li>" lstr "</li>"
+        }
+
+        # HTML ブロック要素はじまり
+        else if (now_l ~ /<(address|article|aside|blockquote|details|dialog|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h.|header|hgroup|hr|li|main|nav|ol|p|pre|section|table|ul)>/) {
+            block = 2
+            print now_l
+        }
+
+        else if (now_l != "") {
+            block = 1
+            print "<p>"
+            print now_l
+        }
+    }
+
+    else if (block == 1) {
+        if (now_l == "") {
+            print "</p>"
+            block = -1
+        }
+        else {
+            print now_l
+        }
+    }
+
+    else if (block == 2) {
+        # HTML ブロック要素終わり
+        if (now_l ~ /<\/(address|article|aside|blockquote|details|dialog|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h.|header|hgroup|hr|li|main|nav|ol|p|pre|section|table|ul)>/) {
+            block = -1
+        }
+        print now_l
+    }
+}
+
+function make_header_str(input_hstr,       level, output_hstr) {
+    count = split(input_hstr, buf, " ")
+
+    level = length(buf[1])
+    output_hstr = buf[2]
+
+    for (i = 3; i <= count; i++) { output_hstr = output_hstr" "buf[i] }
+    return "<h"level">"output_hstr"</h"level">"
 }
 
 # 箇条書きの再帰処理
