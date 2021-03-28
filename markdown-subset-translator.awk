@@ -7,6 +7,7 @@
 #    2  inside of HTML block
 #    3  inside of list (<ul>) block (not used)
 #    4  inside of list (<ol>) block (not used)
+#    5  inside of code block
 
 BEGIN {
     prev_line = ""
@@ -137,6 +138,14 @@ function parse_main(prev_l, now_l, next_l) {
             }
         }
 
+        # コードブロック
+        else if (now_l ~ /(^ {4,}|^\t{1,})/) {
+            block = 5
+            print "<pre><code>"
+            sub(/(^ {4}|^\t{1})/, "", now_l)
+            print now_l
+        }
+
         # HTML ブロック要素はじまり
         else if (now_l ~ /<(address|article|aside|blockquote|details|dialog|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h.|header|hgroup|hr|li|main|nav|ol|p|pre|section|table|ul)>/) {
             block = 2
@@ -166,6 +175,17 @@ function parse_main(prev_l, now_l, next_l) {
             block = -1
         }
         print now_l
+    }
+
+    else if (block == 5) {
+        if (now_l == "") {
+            print "</code></pre>"
+            block = -1
+        }
+        else {
+            sub(/(^ {4}|^\t{1})/, "", now_l)
+            print now_l
+        }
     }
 }
 
