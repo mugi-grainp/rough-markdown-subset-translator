@@ -35,7 +35,7 @@ NR == 1 {
 }
 
 # 箇条書き処理
-now_line ~ /^[\*+\-] / {
+now_line ~ /^[\*+\-] [^\*+\-]+$/ {
     line = now_line "\n" next_line
     li_str = ""
 
@@ -118,19 +118,21 @@ function parse_main(prev_l, now_l, next_l) {
         }
 
         # 見出し H2
-        else if (next_l ~ /^-{1,}$/) {
+        else if ((now_l != "") && (next_l ~ /^-{1,}$/)) {
             print "<h2>"now_l"</h2>"
         }
 
         # 見出し H2 を示す - は無視し、それ以外の - は3つ連続していれば区切り線
         # また、後に文字が続けば箇条書きとみなす
         else if (now_l ~ /^-{1,}$/) {
-            if (prev_l ~ /^[^\-]/) {
+            if ((prev_l != "") && (prev_l ~ /^[^\-]/)) {
                 return
             }
-            else if (now_l ~ /^-{3,}$/) {
-                print "<hr>"
-            }
+        }
+
+        # 区切り線
+        else if (now_l ~ /^([\*_\-] ?){3,}$/) {
+            print "<hr>"
         }
 
         # コードブロック
