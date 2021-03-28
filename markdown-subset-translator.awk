@@ -95,6 +95,9 @@ $0 ~ /^[0-9]{1,}\./ {
 }
 
 END {
+    # 文書がリストで終了した場合、1行前-現在行-1行後のポインタと別に
+    # 文書処理が終了しているので、現在行として記録されている文字列の
+    # 解釈を行わない
     if (is_eof_after_list == 0) {
         parse_main(prev_line, now_line, next_line)
         parse_main(now_line, next_line, "")
@@ -155,7 +158,7 @@ function parse_main(prev_l, now_l, next_l) {
         else if (now_l != "") {
             block = 1
             print "<p>"
-            print now_l
+            print parse_span_elements(now_l)
         }
     }
 
@@ -165,7 +168,7 @@ function parse_main(prev_l, now_l, next_l) {
             block = -1
         }
         else {
-            print now_l
+            print parse_span_elements(now_l)
         }
     }
 
@@ -255,4 +258,13 @@ function make_li_str_ol(level, lines,         li_str,subline,i,count,temp_array)
     li_str = li_str"</li>"
 
     return li_str
+}
+
+function parse_span_elements(str,      tmp_str, output_str) {
+    tmp_str = gensub(/\*\*([^\*]+)\*\*/, "<strong>\\1</strong>", "g", str)
+    tmp_str = gensub(/__([^\*]+)__/, "<strong>\\1</strong>", "g", tmp_str)
+    tmp_str = gensub(/\*([^\*]+)\*/, "<em>\\1</em>", "g", tmp_str)
+    tmp_str = gensub(/_([^\*]+)_/, "<em>\\1</em>", "g", tmp_str)
+    output_str = tmp_str
+    return output_str
 }
