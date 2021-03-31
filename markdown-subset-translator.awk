@@ -8,6 +8,7 @@
 #    3  inside of list (<ul>) block (not used)
 #    4  inside of list (<ol>) block (not used)
 #    5  inside of code block
+#    6  inside of ref block
 
 BEGIN {
     prev_line = ""
@@ -15,6 +16,10 @@ BEGIN {
     next_line = ""
     block  = 0
     is_eof_after_list = 0
+
+    final_output = ""
+    reference_link["foo"] = ""
+    reflink_sep = "\037"
 }
 
 NR == 1 {
@@ -26,7 +31,10 @@ NR == 1 {
 # それ以外
 {
     if (is_eof_after_list == 0) {
-        parse_main(prev_line, now_line, next_line)
+        ret = parse_main(prev_line, now_line, next_line)
+        if (ret != "") {
+            final_output = final_output ret "\n"
+        }
     }
 
     prev_line = now_line
@@ -41,16 +49,16 @@ now_line ~ /^[\*+\-] [^\*+\-]+$/ {
 
     if (block == 1) {
         block = 3
-        print "</p>"
+        final_output = final_output "</p>"
     }
 
-    if (prev_line !~ /^[\*+\-]/) { print "<ul>" }
+    if (prev_line !~ /^[\*+\-]/) { final_output = final_output "<ul>\n" }
 
     while (getline && ($0 ~ /^ *[\*+\-]/)) {
         line = line"\n"$0
     }
     li_str = make_li_str(0, line)
-    print li_str"\n</ul>"
+    final_output = final_output li_str"\n</ul>"
     block = -1
 
     prev_line = ""
@@ -67,16 +75,16 @@ now_line ~ /^[0-9]{1,}\. / {
 
     if (block == 1) {
         block = 4
-        print "</p>"
+        final_output = final_output "</p>"
     }
 
-    if (prev_line !~ /^[0-9]{1,}\./) { print "<ol>" }
+    if (prev_line !~ /^[0-9]{1,}\./) { final_output = final_output "<ol>\n" }
 
     while (getline && ($0 ~ /^ *[0-9]{1,}\. /)) {
         line = line"\n"$0
     }
     li_str = make_li_str_ol(0, line)
-    print li_str"\n</ol>"
+    final_output = final_output li_str "\n</ol>"
     block = -1
 
     prev_line = ""
@@ -91,25 +99,34 @@ END {
     # 文書処理が終了しているので、現在行として記録されている文字列の
     # 解釈を行わない
     if (is_eof_after_list == 0) {
-        parse_main(prev_line, now_line, next_line)
-        parse_main(now_line, next_line, "")
+        ret = parse_main(prev_line, now_line, next_line)
+        if (ret != "") { final_output = final_output ret "\n" }
+
+        ret = parse_main(now_line, next_line, "")
+        if (ret != "") { final_output = final_output ret "\n" }
     }
 
     if (block == 1) {
-        print "</p>"
+        final_output = final_output "</p>"
     }
+
+    # 定義参照リンクをここで変換
+    for (ref in reference_link) {
+        gsub(reflink_sep ref reflink_sep, "<a href=\"" reference_link[ref] "\">" ref "</a>", final_output)
+    }
+    print final_output
 }
 
 function parse_main(prev_l, now_l, next_l) {
     if ((block == 0) || (block == -1)) {
         # 見出し #の数で表記
         if (now_l ~ /^#{1,6}/) {
-            print make_header_str(now_l)
+            return make_header_str(now_l)
         }
 
         # 見出し H1
         else if (next_l ~ /^={1,}$/) {
-            print "<h1>"now_l"</h1>"
+            return "<h1>"now_l"</h1>"
         }
 
         # 見出し H1 を示す = は無視
@@ -119,7 +136,7 @@ function parse_main(prev_l, now_l, next_l) {
 
         # 見出し H2
         else if ((now_l != "") && (next_l ~ /^-{1,}$/)) {
-            print "<h2>"now_l"</h2>"
+            return "<h2>"now_l"</h2>"
         }
 
         # 見出し H2 を示す - は無視し、それ以外の - は3つ連続していれば区切り線
@@ -132,37 +149,45 @@ function parse_main(prev_l, now_l, next_l) {
 
         # 区切り線
         else if (now_l ~ /^([\*_\-] ?){3,}$/) {
-            print "<hr>"
+            return "<hr>"
         }
 
         # コードブロック
         else if (now_l ~ /(^ {4,}|^\t{1,})/) {
             block = 5
-            print "<pre><code>"
+            out_tmp = "<pre><code>"
             sub(/(^ {4}|^\t{1})/, "", now_l)
-            print now_l
+            return out_tmp "\n" now_l
         }
 
         # HTML ブロック要素はじまり
         else if (now_l ~ /<(address|article|aside|blockquote|details|dialog|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h.|header|hgroup|hr|li|main|nav|ol|p|pre|section|table|ul)>/) {
             block = 2
-            print now_l
+            return now_l
+        }
+
+# 定義参照リンクの定義部分
+        else if(now_l ~ /^\[.+\]: .+/) {
+            link_title = gensub(/^\[([^\]]+)\]: .+/, "\\1", 1, now_l)
+            link_url   = gensub(/^\[[^\]]+\]: (.+)/, "\\1", 1, now_l)
+            reference_link[link_title] = link_url
+            return
         }
 
         else if (now_l != "") {
             block = 1
-            print "<p>"
-            print parse_span_elements(now_l)
+            out_tmp = "<p>"
+            return out_tmp "\n" parse_span_elements(now_l)
         }
     }
 
     else if (block == 1) {
         if (now_l == "") {
-            print "</p>"
             block = -1
+            return "</p>"
         }
         else {
-            print parse_span_elements(now_l)
+            return parse_span_elements(now_l)
         }
     }
 
@@ -171,17 +196,17 @@ function parse_main(prev_l, now_l, next_l) {
         if (now_l ~ /<\/(address|article|aside|blockquote|details|dialog|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h.|header|hgroup|hr|li|main|nav|ol|p|pre|section|table|ul)>/) {
             block = -1
         }
-        print now_l
+        return now_l
     }
 
     else if (block == 5) {
         if (now_l == "") {
-            print "</code></pre>"
             block = -1
+            return "</code></pre>"
         }
         else {
             sub(/(^ {4}|^\t{1})/, "", now_l)
-            print now_l
+            return now_l
         }
     }
 }
@@ -256,13 +281,19 @@ function make_li_str_ol(level, lines,         li_str,subline,i,count,temp_array)
 
 function parse_span_elements(str,      tmp_str, output_str) {
     # 文中マークアップ要素の処理
-    # 文中リンク文字列の処理
-
+    # 強調処理
     tmp_str = gensub(/\*\*([^\*]+)\*\*/, "<strong>\\1</strong>", "g", str)
     tmp_str = gensub(/__([^\*]+)__/, "<strong>\\1</strong>", "g", tmp_str)
+
+    # 弱い強調処理
     tmp_str = gensub(/\*([^\*]+)\*/, "<em>\\1</em>", "g", tmp_str)
     tmp_str = gensub(/_([^\*]+)_/, "<em>\\1</em>", "g", tmp_str)
+
+    # 文中リンク文字列の処理
     tmp_str = gensub(/\[([^\]]+)\]\(([^\)]+)\)/, "<a href=\"\\2\">\\1</a>", "g", tmp_str)
+
+    # 定義参照リンク生成のための準備
+    tmp_str = gensub(/\[([^\]]+)\]/, reflink_sep "\\1" reflink_sep, "g", tmp_str)
     output_str = tmp_str
     return output_str
 }
