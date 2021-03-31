@@ -255,10 +255,14 @@ function make_li_str_ol(level, lines,         li_str,subline,i,count,temp_array)
 }
 
 function parse_span_elements(str,      tmp_str, output_str) {
+    # 文中マークアップ要素の処理
+    # 文中リンク文字列の処理
+
     tmp_str = gensub(/\*\*([^\*]+)\*\*/, "<strong>\\1</strong>", "g", str)
     tmp_str = gensub(/__([^\*]+)__/, "<strong>\\1</strong>", "g", tmp_str)
     tmp_str = gensub(/\*([^\*]+)\*/, "<em>\\1</em>", "g", tmp_str)
     tmp_str = gensub(/_([^\*]+)_/, "<em>\\1</em>", "g", tmp_str)
+    tmp_str = gensub(/\[([^\]]+)\]\(([^\)]+)\)/, "<a href=\"\\2\">\\1</a>", "g", tmp_str)
     output_str = tmp_str
     return output_str
 }
