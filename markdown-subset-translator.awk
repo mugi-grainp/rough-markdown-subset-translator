@@ -8,14 +8,13 @@
 #    3  inside of list (<ul>) block (not used)
 #    4  inside of list (<ol>) block (not used)
 #    5  inside of code block
-#    6  inside of ref block
 
 BEGIN {
     prev_line = ""
     now_line  = ""
     next_line = ""
     block  = 0
-    is_eof_after_list = 0
+    is_eof_after_list_or_bq = 0
 
     final_output = ""
     reference_link["foo"] = ""
@@ -25,22 +24,53 @@ BEGIN {
 NR == 1 {
     now_line = $0
     getline next_line
-    $0 = next_line      # getlineは$0を設定しない。後処理の統一のためここで設定
+    next
+}
 
-    ret = parse_main(prev_line, now_line, next_line)
-    if (ret != "") {
-        final_output = final_output ret "\n"
+now_line ~ /^>/ {
+    sub(/^> ?/, "", now_line)
+    sub(/^> ?/, "", next_line)
+    sub(/^> ?/, "", $0)
+    line = now_line "\n" next_line "\n" $0
+
+    while (getline && ($0 ~ /^>/)) {
+        sub(/^> ?/, "", $0)
+        line = line "\n" $0
     }
 
-    prev_line = now_line
-    now_line  = next_line
-    getline next_line
+    bq_translate_command = "echo \"" line "\" | awk -f markdown-subset-translator.awk"
+    while ((bq_translate_command | getline bq_out_buf) > 0){
+        bq_output_str = bq_output_str bq_out_buf "\n"
+    }
+    close(bq_translate_command)
+
+    final_output = final_output "<blockquote>\n" bq_output_str "</blockquote>\n"
+    block = -1
+
+    bq_output_str = ""
+    prev_line = ""
+    now_line  = $0
+    ret = getline next_line
+    if (ret == 0) { is_eof_after_list_or_bq = 1 }
+    $0 = next_line
+    next
+}
+
+# 箇条書き処理
+now_line ~ /^[\*+\-] [^\*+\-]+$/ {
+    parse_ul(0)
+    next
+}
+
+# 順序リスト処理
+now_line ~ /^[0-9]{1,}\. / {
+    parse_ol(0)
     next
 }
 
 # それ以外
 {
-    if (is_eof_after_list == 0) {
+    if (is_eof_after_list_or_bq == 0) {
         ret = parse_main(prev_line, now_line, next_line)
         if (ret != "") {
             final_output = final_output ret "\n"
@@ -52,63 +82,29 @@ NR == 1 {
     next_line = $0
 }
 
-# 箇条書き処理
-now_line ~ /^[\*+\-] [^\*+\-]+$/ {
-    line = now_line "\n" next_line
-    li_str = ""
-
-    if (block == 1) {
-        block = 3
-        final_output = final_output "</p>"
-    }
-
-    if (prev_line !~ /^[\*+\-]/) { final_output = final_output "<ul>\n" }
-
-    while (getline && ($0 ~ /^ *[\*+\-]/)) {
-        line = line"\n"$0
-    }
-    li_str = make_li_str(0, line)
-    final_output = final_output li_str"\n</ul>"
-    block = -1
-
-    prev_line = ""
-    now_line  = $0
-    ret = getline next_line
-    if (ret == 0) { is_eof_after_list = 1 }
-    $0 = next_line
-}
-
-# 順序リスト処理
-now_line ~ /^[0-9]{1,}\. / {
-    line = now_line "\n" next_line
-    li_str = ""
-
-    if (block == 1) {
-        block = 4
-        final_output = final_output "</p>"
-    }
-
-    if (prev_line !~ /^[0-9]{1,}\./) { final_output = final_output "<ol>\n" }
-
-    while (getline && ($0 ~ /^ *[0-9]{1,}\. /)) {
-        line = line"\n"$0
-    }
-    li_str = make_li_str_ol(0, line)
-    final_output = final_output li_str "\n</ol>"
-    block = -1
-
-    prev_line = ""
-    now_line  = $0
-    ret = getline next_line
-    if (ret == 0) { is_eof_after_list = 1 }
-    $0 = next_line
-}
-
 END {
-    # 文書がリストで終了した場合、1行前-現在行-1行後のポインタと別に
-    # 文書処理が終了しているので、現在行として記録されている文字列の
-    # 解釈を行わない
-    if (is_eof_after_list == 0) {
+    # 最終ブロックが2行以下のリスト
+    if (next_line != "") {
+        if ((prev_line == "") && (next_line == $0)) {
+            if (now_line ~ /^[\*+\-] [^\*+\-]+$/) {
+                parse_ul(2)
+            }
+            else if (next_line ~ /^[\*+\-] [^\*+\-]+$/) {
+                parse_ul(1)
+            }
+            else if (now_line ~ /^[0-9]{1,}\. /) {
+                parse_ol(2)
+            }
+            else if (next_line ~ /^[0-9]{1,}\. /) {
+                parse_ol(1)
+            }
+        }
+    }
+
+    # 文書がリストやblockquoteで終了した場合、1行前-現在行-1行後の
+    # ポインタと別に文書処理が終了しているので、現在行として記録さ
+    # れている文字列の解釈を行わない
+    if (is_eof_after_list_or_bq == 0) {
         ret = parse_main(prev_line, now_line, next_line)
         if (ret != "") { final_output = final_output ret "\n" }
 
@@ -118,6 +114,10 @@ END {
 
     if (block == 1) {
         final_output = final_output "</p>"
+    }
+
+    if (block == 5) {
+        final_output = final_output "</code></pre>"
     }
 
     # 定義参照リンクをここで変換
@@ -152,7 +152,10 @@ function parse_main(prev_l, now_l, next_l) {
         # 見出し H2 を示す - は無視し、それ以外の - は3つ連続していれば区切り線
         # また、後に文字が続けば箇条書きとみなす
         else if (now_l ~ /^-{1,}$/) {
-            if ((prev_l != "") && (prev_l ~ /^[^\-]/)) {
+            if (prev_l == "") {
+                return "<hr>"
+            }
+            else {
                 return
             }
         }
@@ -219,6 +222,66 @@ function parse_main(prev_l, now_l, next_l) {
             return now_l
         }
     }
+}
+
+function parse_ul(last_line_count) {
+    if (last_line_count == 2) { line = now_line "\n" next_line }
+    else if (last_line_count == 1) { line = next_line }
+    else if (last_line_count == 0) { line = now_line "\n" next_line "\n" $0 }
+    li_str = ""
+
+    if (block == 1) {
+        final_output = final_output "</p>"
+    }
+    block = 3
+
+    if (prev_line !~ /^[\*+\-]/) { final_output = final_output "<ul>\n" }
+
+    if ($0 != "") {
+        while (getline && ($0 ~ /^ *[\*+\-]/)) {
+            line = line "\n" $0
+        }
+    }
+
+    li_str = make_li_str(0, line)
+    final_output = final_output li_str"\n</ul>"
+    block = -1
+
+    prev_line = ""
+    now_line  = $0
+    ret = getline next_line
+    if (ret == 0) { is_eof_after_list_or_bq = 1; next_line = "" }
+    $0 = next_line
+}
+
+function parse_ol(last_line_count) {
+    if (last_line_count == 2) { line = now_line "\n" next_line }
+    else if (last_line_count == 1) { line = next_line }
+    else if (last_line_count == 0) { line = now_line "\n" next_line "\n" $0 }
+    li_str = ""
+
+    if (block == 1) {
+        final_output = final_output "</p>"
+    }
+    block = 4
+
+    if (prev_line !~ /^[0-9]{1,}\./) { final_output = final_output "<ol>\n" }
+
+    if ($0 != "") {
+        while (getline && ($0 ~ /^ *[0-9]{1,}\. /)) {
+            line = line"\n"$0
+        }
+    }
+
+    li_str = make_li_str_ol(0, line)
+    final_output = final_output li_str "\n</ol>"
+    block = -1
+
+    prev_line = ""
+    now_line  = $0
+    ret = getline next_line
+    if (ret == 0) { is_eof_after_list_or_bq = 1; next_line = "" }
+    $0 = next_line
 }
 
 function make_header_str(input_hstr,       level, output_hstr) {
