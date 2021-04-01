@@ -26,6 +26,16 @@ NR == 1 {
     now_line = $0
     getline next_line
     $0 = next_line      # getlineは$0を設定しない。後処理の統一のためここで設定
+
+    ret = parse_main(prev_line, now_line, next_line)
+    if (ret != "") {
+        final_output = final_output ret "\n"
+    }
+
+    prev_line = now_line
+    now_line  = next_line
+    getline next_line
+    next
 }
 
 # それ以外
