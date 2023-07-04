@@ -73,6 +73,7 @@ function process_list(list_depth) {
                 print "<li>" line "</li>"
                 line = gensub(/^ *[\*+\-] /, "", 1, $0)
                 print "</ul>"
+                print "</li>"
                 print "<li>" line
                 is_list_processing[list_depth] = 0
                 return
