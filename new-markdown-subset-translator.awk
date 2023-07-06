@@ -21,19 +21,100 @@ BEGIN {
     #    0  inside of unknown block
     #    1  inside of paragraph block
     #    2  inside of HTML block
-    #    3  inside of list (<ul>) block (not used)
-    #    4  inside of list (<ol>) block (not used)
+    #    3  inside of list (<ul>) block
+    #    4  inside of list (<ol>) block
     #    5  inside of code block
+    #    6  inside of blockquote
     block = 0
 }
 
-# 見出し #の数で表記
+# ===============================================================
+# コードブロックの処理
+# <pre><code>...</code></pre>
+#
+# 特定のコードブロックにいない時に行頭スペース4つ以上の行が現れた
+# 場合
+# ===============================================================
+/(^ {4,}|^\t{1,})/ && block == 0 {
+    print "<pre><code>"
+    block = 5
+}
+
+# ===============================================================
+# 引用ブロックの処理
+# <blockquote>
+#
+# 引用ブロック内のMarkdownは通常の通り解釈される
+#
+# 引用ブロック中の引用 (blockquote-in-blockquote) もMarkdownの
+# 文法に存在し、HTMLの定義上も存在し得るため、引用ブロックの全
+# 行を読み込んでこのプログラムに再帰的に通す
+# ===============================================================
+/^>/ {
+    # 引用ブロック処理モードとする
+    block = 6
+
+    # 空行に当たるまでを引用ブロックとして全部読み込む
+    # その際、行頭に引用記号があれば除去する
+    sub(/^> ?/, "", $0)
+    line = $0
+    while (getline && ($0 != "")) {
+        sub(/^> ?/, "", $0)
+        line = line "\n" $0
+    }
+    line = line "\n"
+
+    # 引用ブロック中の文章をMarkdownとして再解釈するため、この
+    # new-markdown-subset-translator.awk を再帰的に呼び出す
+    bq_translate_command = "echo \"" line "\" | awk -f new-markdown-subset-translator.awk"
+
+    # パイブ機能とgetlineの効果により、再解釈の結果がbq_output_strに得られる
+    while ((bq_translate_command | getline bq_out_buf) > 0){
+        bq_output_str = bq_output_str bq_out_buf "\n"
+    }
+    close(bq_translate_command)
+
+    # 再解釈結果を出力し、引用ブロック処理を終了する
+    print "<blockquote>\n" bq_output_str "</blockquote>"
+    bq_output_str = ""
+    block = 0
+    next
+}
+
+# ===============================================================
+# HTMLブロック要素の処理
+#
+# HTMLブロック要素はそのまま出力し、ブロック要素内部のMarkdownは
+# 解釈しない
+# ===============================================================
+# ブロック要素の始点
+/<(address|article|aside|blockquote|details|dialog|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h.|header|hgroup|hr|li|main|nav|ol|p|pre|section|table|ul)>/ {
+    block = 2
+    print $0
+    next
+}
+
+# ブロック要素の終点
+/<\/(address|article|aside|blockquote|details|dialog|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h.|header|hgroup|hr|li|main|nav|ol|p|pre|section|table|ul)>/ {
+    block = 0
+    print $0
+    next
+}
+
+# ===============================================================
+# 見出しの処理
+# <h1> ～ <h6>
+#
+# # の数で表記
+# ===============================================================
 /^#{1,6}/ {
     print make_header_str($0)
     next
 }
 
+# ===============================================================
 # 区切り線 <hr>
+# ===============================================================
 /^([\*_\-] ?){3,}$/ {
     print "<hr>"
     next
@@ -64,7 +145,11 @@ $0 ~ re_ol_top {
 }
 
 # ===============================================================
-# 空行処理（段落区切りなど）
+# 空行処理
+#
+# 段落区切り、コードブロックの終わりの場合は終了タグを打ってから
+# デフォルトモードに復帰する
+# HTMLブロック要素処理中は単に無視する
 # ===============================================================
 /^$/ {
     # 段落の区切りであれば </p> を入れる
@@ -72,18 +157,40 @@ $0 ~ re_ol_top {
         print "</p>"
         block = 0
     }
+    # コードブロックの終わりであれば </code></pre> を入れる
+    else if (block == 5) {
+        print "</code></pre>"
+        block = 0
+    }
+    # HTMLブロック要素処理中は単に無視する
+    else if (block == 2) {
+        print ""
+    }
     next
 }
-
 
 # ===============================================================
 # 一般の行の処理
 # ===============================================================
 {
+    # 各要素の外の場合
     if (block == 0) {
         print "<p>"
         block = 1
     }
+
+    # コードブロック内の場合、コードブロックを表現する先頭の字下げ
+    # を削除
+    else if (block == 5) {
+        sub(/(^ {4}|^\t)/, "", $0)
+        print $0
+        next
+    }
+    # HTMLブロック要素処理中は単に無視する
+    else if (block == 2) {
+        print $0
+    }
+    # インライン要素を処理
     print parse_span_elements($0)
 }
 
@@ -91,8 +198,14 @@ $0 ~ re_ol_top {
 # 最終行処理
 # ===============================================================
 END {
+    # ファイル末尾が箇条書きリストであった場合は、ul, olに応じた
+    # 閉じタグを出力
     if (is_list_processing[1] == 1) {
         print "</" list_type_for_finalization ">"
+    }
+    # 段落処理中に最終行に達した場合は段落を閉じる
+    if (block == 1) {
+        print "</p>"
     }
 }
 
