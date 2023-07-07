@@ -2,6 +2,10 @@
 
 # new-markdown-subset-translator.awk
 # Markdown形式で記述されたテキストファイルをHTMLに変換する
+#
+# 後ろの行で読んだ結果を前の方に反映する処理があるため、
+# 途中の変換はすべて最終出力変数に入れ、処理後にEND
+# ブロックで出力する
 
 BEGIN {
     # ある深さのリストを処理中であるかのフラグ
@@ -26,6 +30,15 @@ BEGIN {
     #    5  inside of code block
     #    6  inside of blockquote
     block = 0
+
+    # 定義参照形式のリンクとそのtitle属性を保存する連想配列
+    reference_link_url["\005"] = ""
+    reference_link_title["\005"] = ""
+    # 定義参照
+    reflink_sep = "\037"
+
+    # 最終出力を保存する変数
+    final_output = ""
 }
 
 # ===============================================================
@@ -36,7 +49,7 @@ BEGIN {
 # 場合
 # ===============================================================
 /(^ {4,}|^\t{1,})/ && block == 0 {
-    print "<pre><code>"
+    final_output = final_output "<pre><code>" "\n"
     block = 5
 }
 
@@ -75,7 +88,7 @@ BEGIN {
     close(bq_translate_command)
 
     # 再解釈結果を出力し、引用ブロック処理を終了する
-    print "<blockquote>\n" bq_output_str "</blockquote>"
+    final_output = final_output "<blockquote>\n" bq_output_str "</blockquote>\n"
     bq_output_str = ""
     block = 0
     next
@@ -90,14 +103,14 @@ BEGIN {
 # ブロック要素の始点
 /<(address|article|aside|blockquote|details|dialog|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h.|header|hgroup|hr|li|main|nav|ol|p|pre|section|table|ul)>/ {
     block = 2
-    print $0
+    final_output = final_output $0 "\n"
     next
 }
 
 # ブロック要素の終点
 /<\/(address|article|aside|blockquote|details|dialog|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h.|header|hgroup|hr|li|main|nav|ol|p|pre|section|table|ul)>/ {
     block = 0
-    print $0
+    final_output = final_output $0 "\n"
     next
 }
 
@@ -108,7 +121,7 @@ BEGIN {
 # # の数で表記
 # ===============================================================
 /^#{1,6}/ {
-    print make_header_str($0)
+    final_output = final_output make_header_str($0) "\n"
     next
 }
 
@@ -116,7 +129,7 @@ BEGIN {
 # 区切り線 <hr>
 # ===============================================================
 /^([\*_\-] ?){3,}$/ {
-    print "<hr>"
+    final_output = final_output "<hr>" "\n"
     next
 }
 
@@ -130,7 +143,7 @@ BEGIN {
 $0 ~ re_ul_top {
     block = 3
     list_type_for_finalization = "ul"
-    process_list(1, "ul")
+    final_output = final_output process_list(1, "ul")
     block = 0
     next
 }
@@ -139,8 +152,25 @@ $0 ~ re_ul_top {
 $0 ~ re_ol_top {
     block = 4
     list_type_for_finalization = "ol"
-    process_list(1, "ol")
+    final_output = final_output process_list(1, "ol")
     block = 0
+    next
+}
+
+# ===============================================================
+# 定義参照形式のリンク処理
+#
+# リンクの定義がリンクの参照部分以降に来る
+# 定義参照部分の変換をここで行う
+# ===============================================================
+
+/^\[.+\]: +.+/ {
+    link_string = gensub(/^\[([^\]]+)\]: +.+/, "\\1", 1, $0)
+    link_url    = gensub(/^\[[^\]]+\]: +([^ ]+) .*/, "\\1", 1, $0)
+    link_title  = gensub(/^\[[^\]]+\]: +[^ ]+ ["'\(](.*)["'\)]/, "\\1", 1, $0)
+
+    reference_link_url[link_string] = link_url
+    reference_link_title[link_string] = link_title
     next
 }
 
@@ -154,17 +184,17 @@ $0 ~ re_ol_top {
 /^$/ {
     # 段落の区切りであれば </p> を入れる
     if (block == 1) {
-        print "</p>"
+        final_output = final_output "</p>\n"
         block = 0
     }
     # コードブロックの終わりであれば </code></pre> を入れる
     else if (block == 5) {
-        print "</code></pre>"
+        final_output = final_output "</code></pre>\n"
         block = 0
     }
-    # HTMLブロック要素処理中は単に無視する
+    # HTMLブロック要素処理中は空行のままとする
     else if (block == 2) {
-        print ""
+        final_output = final_output "\n"
     }
     next
 }
@@ -175,7 +205,7 @@ $0 ~ re_ol_top {
 {
     # 各要素の外の場合
     if (block == 0) {
-        print "<p>"
+        final_output = final_output "<p>\n"
         block = 1
     }
 
@@ -183,15 +213,15 @@ $0 ~ re_ol_top {
     # を削除
     else if (block == 5) {
         sub(/(^ {4}|^\t)/, "", $0)
-        print $0
+        final_output = final_output $0 "\n"
         next
     }
     # HTMLブロック要素処理中は単に無視する
     else if (block == 2) {
-        print $0
+        final_output = final_output $0 "\n"
     }
     # インライン要素を処理
-    print parse_span_elements($0)
+    final_output = final_output parse_span_elements($0) "\n"
 }
 
 # ===============================================================
@@ -201,12 +231,19 @@ END {
     # ファイル末尾が箇条書きリストであった場合は、ul, olに応じた
     # 閉じタグを出力
     if (is_list_processing[1] == 1) {
-        print "</" list_type_for_finalization ">"
+        final_output = final_output "</" list_type_for_finalization ">\n"
     }
     # 段落処理中に最終行に達した場合は段落を閉じる
     if (block == 1) {
-        print "</p>"
+        final_output = final_output "</p>\n"
     }
+
+    # 定義参照リンクを変換
+    for (ref in reference_link_url) {
+        gsub(reflink_sep ref reflink_sep, "<a href=\"" reference_link_url[ref] "\" title=\"" reference_link_title[ref] "\">" ref "</a>", final_output)
+    }
+
+    print final_output
 }
 
 # ===============================================================
@@ -214,7 +251,10 @@ END {
 # ===============================================================
 
 # 箇条書きリストの変換
-function process_list(list_depth, list_type) {
+function process_list(list_depth, list_type,        output_str, pos, next_depth, row_head, lv2_head, line) {
+    # この関数で変換する文書ブロックの最終出力
+    output_str = ""
+
     # list_type: ul もしくは ol（タグの名前そのまま）
     # list_typeにより、行頭の正規表現を定める
     if (list_type == "ul") {
@@ -227,7 +267,7 @@ function process_list(list_depth, list_type) {
 
     # 当該階層のリスト処理をここから始める場合は開始タグを打つ
     if (is_list_processing[list_depth] != 1) {
-        print "<" list_type ">"
+        output_str = output_str "<" list_type ">\n"
         is_list_processing[list_depth] = 1
     }
 
@@ -246,14 +286,14 @@ function process_list(list_depth, list_type) {
 
         # ファイル終端、または空行に行き当たったらリスト1個の終わりとする
         if (eof_status == 0 || $0 == "") {
-            print "<li>" line "</li>"
-            print "</" list_type ">"
+            output_str = output_str "<li>" parse_span_elements(line) "</li>\n"
+            output_str = output_str "</" list_type ">\n"
 
             # 全ての深さについてリスト処理の終了を設定
             for (i = 1; i <= list_depth; i++) {
                 is_list_processing[i] = 0
             }
-            return
+            return output_str
         }
 
         # 次のリストの始まりを検出した場合
@@ -265,34 +305,34 @@ function process_list(list_depth, list_type) {
             # ネスト段階の変化による分岐
             if (next_depth - list_depth == 0) {
                 # 同一レベル
-                print "<li>" line "</li>"
+                output_str = output_str "<li>" parse_span_elements(line) "</li>\n"
                 line = gensub(lv2_head, "", 1, $0)
             } else if (next_depth - list_depth == 1) {
                 # 1つ深い
-                print "<li>" line
-                process_list(list_depth + 1, list_type)
-                print "</li>"
+                output_str = output_str "<li>" parse_span_elements(line) "\n"
+                output_str = output_str process_list(list_depth + 1, list_type) "</li>\n"
 
                 # 最終行 or 空行検出によりリスト処理が終了している場合は、閉じタグを打つ
                 if (is_list_processing[list_depth] == 0) {
-                    print "</" list_type ">"
+                    output_str = output_str "</" list_type ">\n"
                 }
-                return
+                return output_str
             } else if (next_depth - list_depth == -1) {
                 # 1つ浅い
-                print "<li>" line "</li>"
+                output_str = "<li>" line "</li>\n"
                 line = gensub(lv2_head, "", 1, $0)
-                print "</" list_type ">"
-                print "</li>"
-                print "<li>" line
+                output_str = output_str "</" list_type ">\n</li>\n"
+                output_str = output_str "<li>" parse_span_elements(line) "\n"
                 is_list_processing[list_depth] = 0
-                return
+                return output_str
             }
         } else {
             # 途中で改行された1項目の続きなので、先頭のインデントを取り除いて連結する
             line = line gensub(/^ */, "", 1, $0)
         }
     }
+
+    return output_str
 }
 
 # #の数に応じた見出しタグの生成
@@ -309,7 +349,7 @@ function make_header_str(input_hstr,       level, output_hstr) {
 }
 
 # 文中マークアップ要素の処理
-function parse_span_elements(str,      tmp_str, output_str) {
+function parse_span_elements(str,      tmp_str, output_str, link_href_and_title, link_str, link_url, link_title) {
     # 強調処理
     tmp_str = gensub(/\*\*([^\*]+)\*\*/, "<strong>\\1</strong>", "g", str)
     tmp_str = gensub(/__([^\*]+)__/, "<strong>\\1</strong>", "g", tmp_str)
@@ -319,8 +359,12 @@ function parse_span_elements(str,      tmp_str, output_str) {
     tmp_str = gensub(/_([^\*]+)_/, "<em>\\1</em>", "g", tmp_str)
 
     # 文中リンク文字列の処理
-    tmp_str = gensub(/\[([^\]]+)\]\(([^\)]+)\)/, "<a href=\"\\2\">\\1</a>", "g", tmp_str)
+    tmp_str = gensub(/\[([^\]]+)\]\(([^ ]+)( ?['"]([^\)]+)['"])*\)/, "<a href=\"\\2\" title=\"\\4\">\\1</a>", "g", tmp_str)
+    # title属性の指定がない場合は、title属性の定義を消去する
+    tmp_str = gensub(/ title=""/, "", "g", tmp_str)
 
+    # 定義参照リンク生成のための準備
+    tmp_str = gensub(/\[([^\]]+)\]/, reflink_sep "\\1" reflink_sep, "g", tmp_str)
     output_str = tmp_str
 
     return output_str
