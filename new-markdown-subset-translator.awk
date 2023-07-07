@@ -358,6 +358,12 @@ function parse_span_elements(str,      tmp_str, output_str, link_href_and_title,
     tmp_str = gensub(/\*([^\*]+)\*/, "<em>\\1</em>", "g", tmp_str)
     tmp_str = gensub(/_([^\*]+)_/, "<em>\\1</em>", "g", tmp_str)
 
+    # 打ち消しの処理
+    tmp_str = gensub(/~~([^~]+)~~/, "<s>\\1</s>", "g", tmp_str)
+
+    # 単一フレーズのコードの処理
+    tmp_str = gensub(/`([^~]+)`/, "<code>\\1</code>", "g", tmp_str)
+
     # 文中リンク文字列の処理
     tmp_str = gensub(/\[([^\]]+)\]\(([^ ]+)( ?['"]([^\)]+)['"])*\)/, "<a href=\"\\2\" title=\"\\4\">\\1</a>", "g", tmp_str)
     # title属性の指定がない場合は、title属性の定義を消去する
