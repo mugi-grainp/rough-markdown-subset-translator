@@ -1,6 +1,6 @@
 #!/usr/bin/awk -f
 
-# new-markdown-subset-translator.awk
+# markdown-subset-translator.awk
 # Markdown形式で記述されたテキストファイルをHTMLに変換する
 #
 # 後ろの行で読んだ結果を前の方に反映する処理があるため、
@@ -13,11 +13,11 @@ BEGIN {
     # 順序なし箇条書きリストの最上位階層
     # re_ul_top = /^[\*+\-] /
     re_ul_top = "^[*+-] "
-    # 順序なし箇条書きリストのLv2以降
+    # 順序なし箇条書きリスト (最上位階層を含むすべて)
     re_ul_lv2 = "^ *[*+-] "
     # 順序あり箇条書きリストの最上位階層
     re_ol_top = "^[0-9]{1,}. "
-    # 順序あり箇条書きリストのLv2以降
+    # 順序あり箇条書きリストのLv2 (最上位階層を含むすべて)
     re_ol_lv2 = "^ *[0-9]{1,}. "
     # 終端処理用のリスト種類記憶
     list_type_for_finalization = ""
@@ -71,15 +71,14 @@ BEGIN {
     # その際、行頭に引用記号があれば除去する
     sub(/^> ?/, "", $0)
     line = $0
-    while (getline && ($0 != "")) {
+    while ((getline != 0) && ($0 != "")) {
         sub(/^> ?/, "", $0)
         line = line "\n" $0
     }
-    line = line "\n"
 
     # 引用ブロック中の文章をMarkdownとして再解釈するため、この
-    # new-markdown-subset-translator.awk を再帰的に呼び出す
-    bq_translate_command = "echo \"" line "\" | awk -f new-markdown-subset-translator.awk"
+    # markdown-subset-translator.awk を再帰的に呼び出す
+    bq_translate_command = "echo \"" line "\" | awk -f markdown-subset-translator.awk"
 
     # パイブ機能とgetlineの効果により、再解釈の結果がbq_output_strに得られる
     while ((bq_translate_command | getline bq_out_buf) > 0){
@@ -166,8 +165,8 @@ $0 ~ re_ol_top {
 
 /^\[.+\]: +.+/ {
     link_string = gensub(/^\[([^\]]+)\]: +.+/, "\\1", 1, $0)
-    link_url    = gensub(/^\[[^\]]+\]: +([^ ]+) .*/, "\\1", 1, $0)
-    link_title  = gensub(/^\[[^\]]+\]: +[^ ]+ ["'\(](.*)["'\)]/, "\\1", 1, $0)
+    link_url    = gensub(/^\[[^\]]+\]: +([^ ]+) ?.*/, "\\1", 1, $0)
+    link_title  = gensub(/^\[[^\]]+\]: +[^ ]+ ?(["'\(](.+)["'\)])*/, "\\2", 1, $0)
 
     reference_link_url[link_string] = link_url
     reference_link_title[link_string] = link_title
@@ -237,13 +236,19 @@ END {
     if (block == 1) {
         final_output = final_output "</p>\n"
     }
+    # コードブロック処理中に最終行に達した場合はコードブロックを閉じる
+    if (block == 5) {
+        final_output = final_output "</code></pre>\n"
+    }
 
     # 定義参照リンクを変換
     for (ref in reference_link_url) {
         gsub(reflink_sep ref reflink_sep, "<a href=\"" reference_link_url[ref] "\" title=\"" reference_link_title[ref] "\">" ref "</a>", final_output)
+        # title属性の指定がない場合は、title属性の定義を消去する
+        gsub(/ title=""/, "", final_output)
     }
 
-    print final_output
+    printf "%s", final_output
 }
 
 # ===============================================================
@@ -315,13 +320,29 @@ function process_list(list_depth, list_type,        output_str, pos, next_depth,
                 # 最終行 or 空行検出によりリスト処理が終了している場合は、閉じタグを打つ
                 if (is_list_processing[list_depth] == 0) {
                     output_str = output_str "</" list_type ">\n"
+                    return output_str
                 }
-                return output_str
+                # 再帰から帰ってきたこの時点で$0に次の行が読み込まれている
+                line = gensub(lv2_head, "", 1, $0)
             } else if (next_depth - list_depth == -1) {
                 # 1つ浅い
                 output_str = output_str "<li>" line "</li>\n"
-                line = gensub(lv2_head, "", 1, $0)
                 output_str = output_str "</" list_type ">\n</li>\n"
+
+                # 現在行を処理対象に加える
+                line = gensub(lv2_head, "", 1, $0)
+                # 次の行以降に1つの箇条書きの続きの文がないかチェック
+                while (1) {
+                    eof_status_2 = getline
+                    if (eof_status_2 != 0 && $0 !~ lv2_head) {
+                        line = line gensub(/^ */, "", 1, $0)
+                    }
+                    else {
+                        break
+                    }
+                }
+
+                # この時点で$0に次の行が読み込まれているので、次工程では注意
                 output_str = output_str "<li>" parse_span_elements(line) "\n"
                 is_list_processing[list_depth] = 0
                 return output_str
