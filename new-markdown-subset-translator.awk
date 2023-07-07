@@ -319,7 +319,7 @@ function process_list(list_depth, list_type,        output_str, pos, next_depth,
                 return output_str
             } else if (next_depth - list_depth == -1) {
                 # 1つ浅い
-                output_str = "<li>" line "</li>\n"
+                output_str = output_str "<li>" line "</li>\n"
                 line = gensub(lv2_head, "", 1, $0)
                 output_str = output_str "</" list_type ">\n</li>\n"
                 output_str = output_str "<li>" parse_span_elements(line) "\n"
