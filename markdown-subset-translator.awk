@@ -390,19 +390,29 @@ function make_header_str(input_hstr,       level, output_hstr) {
 
 # 文中マークアップ要素の処理
 function parse_span_elements(str,      tmp_str, output_str, link_href_and_title, link_str, link_url, link_title) {
-    # 強調処理
-    tmp_str = gensub(/ \*\*([^\*]+)\*\* /, "<strong>\\1</strong>", "g", str)
-    tmp_str = gensub(/ __([^\*]+)__ /, "<strong>\\1</strong>", "g", tmp_str)
+    # 強調処理 (通常・行頭・行末)
+    # アスタリスクは前後空白なしを許容
+    # アンダースコアは文章の一部となり得やすいので空白必須
+    tmp_str = gensub(/ ?\*\*([^\*]+)\*\* ?/, "<strong>\\1</strong>", "g", str)
+    tmp_str = gensub(/ __([^_]+)__ /, "<strong>\\1</strong>", "g", tmp_str)
+    tmp_str = gensub(/^__([^_]+)__ /, "<strong>\\1</strong>", "g", tmp_str)
+    tmp_str = gensub(/ __([^_]+)__$/, "<strong>\\1</strong>", "g", tmp_str)
 
-    # 弱い強調処理
-    tmp_str = gensub(/ \*([^\*]+)\* /, "<em>\\1</em>", "g", tmp_str)
-    tmp_str = gensub(/ _([^\*]+)_ /, "<em>\\1</em>", "g", tmp_str)
+    # 弱い強調処理 (通常・行頭・行末)
+    # アスタリスクは前後空白なしを許容
+    # アンダースコアは文章の一部となり得やすいので空白必須
+    tmp_str = gensub(/ ?\*([^\*]+)\* ?/, "<em>\\1</em>", "g", tmp_str)
+    tmp_str = gensub(/ _([^_]+)_ /, "<em>\\1</em>", "g", tmp_str)
+    tmp_str = gensub(/^_([^_]+)_ /, "<em>\\1</em>", "g", tmp_str)
+    tmp_str = gensub(/ _([^_]+)_$/, "<em>\\1</em>", "g", tmp_str)
 
-    # 打ち消しの処理
+    # 打ち消しの処理 (通常・行頭・行末)
     tmp_str = gensub(/ ~~([^~]+)~~ /, "<s>\\1</s>", "g", tmp_str)
+    tmp_str = gensub(/^~~([^~]+)~~ /, "<s>\\1</s>", "g", tmp_str)
+    tmp_str = gensub(/ ~~([^~]+)~~$/, "<s>\\1</s>", "g", tmp_str)
 
     # 単一フレーズのコードの処理
-    tmp_str = gensub(/`([^~]+)`/, "<code>\\1</code>", "g", tmp_str)
+    tmp_str = gensub(/`([^`]+)`/, "<code>\\1</code>", "g", tmp_str)
 
     # 文中リンク文字列の処理
     tmp_str = gensub(/\[([^\]]+)\]\(([^ ]+)( ?['"]([^\)]+)['"])*\)/, "<a href=\"\\2\" title=\"\\4\">\\1</a>", "g", tmp_str)
