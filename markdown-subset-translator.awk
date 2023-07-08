@@ -32,6 +32,7 @@ BEGIN {
     #    4  inside of list (<ol>) block
     #    5  inside of code block
     #    6  inside of blockquote
+    #    7  inside of table block
     block = 0
 
     # 定義参照形式のリンクとそのtitle属性を保存する連想配列
@@ -93,6 +94,19 @@ BEGIN {
     # 再解釈結果を出力し、引用ブロック処理を終了する
     final_output = final_output "<blockquote>\n" bq_output_str "</blockquote>\n"
     bq_output_str = ""
+    block = 0
+    next
+}
+
+# ===============================================================
+# テーブル記法の処理
+# <table>、<tr>、<th>、<td>
+#
+# 左右揃え、中央揃えはCSSと連携
+# ===============================================================
+/^\|/ {
+    block = 7
+    final_output = final_output process_table()
     block = 0
     next
 }
@@ -424,4 +438,32 @@ function parse_span_elements(str,      tmp_str, output_str, link_href_and_title,
     output_str = tmp_str
 
     return output_str
+}
+
+# テーブル記法の処理
+function process_table(       eof_status, tmp_line, output_table, mode) {
+    # 処理モード (th, td)
+    mode = "th"
+    output_table = "<table>\n"
+
+    while(1) {
+        # ヘッダとデータを区切る線まで来たらヘッダモードからデータモードへ移行
+        if ($0 ~ /^[-\|:]+$/) {
+            mode = "td"
+            getline
+            continue
+        }
+        tmp_line = gensub(/^\| */, "<tr><" mode ">", 1, $0)
+        tmp_line = gensub(/ *\|$/, "</" mode "></tr>", 1, tmp_line)
+        tmp_line = gensub(/ *\| */, "</" mode "><" mode ">", "g", tmp_line)
+
+        output_table = output_table tmp_line "\n"
+
+        eof_status = getline
+        if (eof_status == 0 || $0 == "") {
+            output_table = output_table "</table>\n"
+            return output_table
+        }
+    }
+    return output_table
 }
