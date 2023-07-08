@@ -6,6 +6,9 @@
 # 後ろの行で読んだ結果を前の方に反映する処理があるため、
 # 途中の変換はすべて最終出力変数に入れ、処理後にEND
 # ブロックで出力する
+#
+# 外部オプション
+#   del_p_newline: 1のとき、<p>段落中の改行を除去する
 
 BEGIN {
     # ある深さのリストを処理中であるかのフラグ
@@ -39,6 +42,7 @@ BEGIN {
 
     # 最終出力を保存する変数
     final_output = ""
+
 }
 
 # ===============================================================
@@ -183,7 +187,14 @@ $0 ~ re_ol_top {
 /^$/ {
     # 段落の区切りであれば </p> を入れる
     if (block == 1) {
-        final_output = final_output "</p>\n"
+        # del_p_newline の指定有無による分岐は単なる出力結果の
+        # 見栄え調整のものであって、本質的ではないので除去しても
+        # 動作には問題がない
+        if (del_p_newline == 1) {
+            final_output = final_output "\n</p>\n"
+        } else {
+            final_output = final_output "</p>\n"
+        }
         block = 0
     }
     # コードブロックの終わりであれば </code></pre> を入れる
@@ -208,6 +219,14 @@ $0 ~ re_ol_top {
         block = 1
     }
 
+    # 段落ブロック処理中
+    if (block == 1) {
+        # 段落ブロック中の改行を消去するよう外部からフラグが設定されている場合
+        if (del_p_newline == 1) {
+            final_output = final_output parse_span_elements($0)
+            next
+        }
+    }
     # コードブロック内の場合、コードブロックを表現する先頭の字下げ
     # を削除
     else if (block == 5) {
