@@ -48,7 +48,17 @@ MarkdownをHTMLに変換します。
 
 ## 使い方
 
-    $ awk -f markdown-subset-translator.awk [FILE]
+単にawkプログラムとして呼び出してください。
+
+    awk -f markdown-subset-translator.awk [FILE]
+
+### 指定できるオプション
+
+`del_p_newline` オプションを1に設定すると、段落ブロックを&lt;p&gt;タグで囲う際
+に、段落中にある改行をすべて除去します。awkのvオプションを使って変数の値をプロ
+グラム外から設定します。
+
+    awk -f markdown-subset-translator.awk -v del_p_newline=1 [FILE]
 
 ## 利用場面
 
