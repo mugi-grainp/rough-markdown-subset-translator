@@ -35,11 +35,15 @@ BEGIN {
     #    7  inside of table block
     block = 0
 
+    # 定義参照形式の画像とそのtitle属性を保存する連想配列
+    reference_img_url["\005"] = ""
+    reference_img_title["\005"] = ""
     # 定義参照形式のリンクとそのtitle属性を保存する連想配列
     reference_link_url["\005"] = ""
     reference_link_title["\005"] = ""
-    # 定義参照
-    reflink_sep = "\037"
+    # 定義参照区切り記号
+    reflink_sep = "\035"
+    refimg_sep = "\036"
 
     # 最終出力を保存する変数
     final_output = ""
@@ -180,7 +184,6 @@ $0 ~ re_ol_top {
 # リンクの定義がリンクの参照部分以降に来る
 # 定義参照部分の変換をここで行う
 # ===============================================================
-
 /^\[.+\]: +.+/ {
     link_string = gensub(/^\[([^\]]+)\]: +.+/, "\\1", 1, $0)
     link_url    = gensub(/^\[[^\]]+\]: +([^ ]+) ?.*/, "\\1", 1, $0)
@@ -274,12 +277,17 @@ END {
         final_output = final_output "</code></pre>\n"
     }
 
+    # 定義参照型画像埋め込みを変換
+    for (ref in reference_link_url) {
+        gsub(refimg_sep ref refimg_sep, "<img src=\"" reference_link_url[ref] "\" title=\"" reference_link_title[ref] "\" alt=\"" ref "\">", final_output)
+    }
+
     # 定義参照リンクを変換
     for (ref in reference_link_url) {
         gsub(reflink_sep ref reflink_sep, "<a href=\"" reference_link_url[ref] "\" title=\"" reference_link_title[ref] "\">" ref "</a>", final_output)
-        # title属性の指定がない場合は、title属性の定義を消去する
-        gsub(/ title=""/, "", final_output)
     }
+    # 定義参照型の画像埋め込み・リンクにおいてtitle属性の指定がない場合は、title属性の定義を消去する
+    gsub(/ title=""/, "", final_output)
 
     printf "%s", final_output
 }
@@ -428,13 +436,21 @@ function parse_span_elements(str,      tmp_str, output_str, link_href_and_title,
     # 単一フレーズのコードの処理
     tmp_str = gensub(/`([^`]+)`/, "<code>\\1</code>", "g", tmp_str)
 
+    # 画像埋め込み記法の処理
+    tmp_str = gensub(/!\[([^\]]*)\]\(([^ ]+)( ?['"]([^\)]+)['"])*\)/, "<img src=\"\\2\" alt=\"\\1\" title=\"\\4\">", "g", tmp_str)
+    # title属性の指定がない場合は、title属性の定義を消去する
+    tmp_str = gensub(/ title=""/, "", "g", tmp_str)
+
     # 文中リンク文字列の処理
     tmp_str = gensub(/\[([^\]]+)\]\(([^ ]+)( ?['"]([^\)]+)['"])*\)/, "<a href=\"\\2\" title=\"\\4\">\\1</a>", "g", tmp_str)
     # title属性の指定がない場合は、title属性の定義を消去する
     tmp_str = gensub(/ title=""/, "", "g", tmp_str)
 
+    # 定義参照型画像埋め込み指定のための準備
+    tmp_str = gensub(/!\[([^\]]+)\]/, refimg_sep "\\1" refimg_sep, "g", tmp_str)
     # 定義参照リンク生成のための準備
     tmp_str = gensub(/\[([^\]]+)\]/, reflink_sep "\\1" reflink_sep, "g", tmp_str)
+
     output_str = tmp_str
 
     return output_str
