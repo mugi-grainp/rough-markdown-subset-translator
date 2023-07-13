@@ -279,12 +279,19 @@ END {
 
     # 定義参照型画像埋め込みを変換
     for (ref in reference_link_url) {
-        gsub(refimg_sep ref refimg_sep, "<img src=\"" reference_link_url[ref] "\" title=\"" reference_link_title[ref] "\" alt=\"" ref "\">", final_output)
+        # 識別子指定ありの箇所を変換
+        final_output = gensub(refimg_sep "([^\005\n]+)\005" ref refimg_sep, "<img src=\"" reference_link_url[ref] "\" title=\"" reference_link_title[ref] "\" alt=\"\\1\">", "g", final_output)
+        # 識別子指定なしの箇所を変換
+        final_output = gensub(refimg_sep ref "\005" refimg_sep, "<img src=\"" reference_link_url[ref] "\" title=\"" reference_link_title[ref] "\" alt=\"" ref "\">", "g", final_output)
     }
 
     # 定義参照リンクを変換
     for (ref in reference_link_url) {
-        gsub(reflink_sep ref reflink_sep, "<a href=\"" reference_link_url[ref] "\" title=\"" reference_link_title[ref] "\">" ref "</a>", final_output)
+        # 識別子指定ありの箇所を変換
+        final_output = gensub(reflink_sep "([^\005\n]+)\005" ref reflink_sep, "<a href=\"" reference_link_url[ref] "\" title=\"" reference_link_title[ref] "\">\\1</a>", "g", final_output)
+        # final_output = gensub(reflink_sep "[^\005\n]+\005" ref reflink_sep, "HHH", "g", final_output)
+        # 識別子指定なしの箇所を変換
+        final_output = gensub(reflink_sep ref "\005" reflink_sep, "<a href=\"" reference_link_url[ref] "\" title=\"" reference_link_title[ref] "\">" ref "</a>", "g", final_output)
     }
     # 定義参照型の画像埋め込み・リンクにおいてtitle属性の指定がない場合は、title属性の定義を消去する
     gsub(/ title=""/, "", final_output)
@@ -447,9 +454,9 @@ function parse_span_elements(str,      tmp_str, output_str, link_href_and_title,
     tmp_str = gensub(/ title=""/, "", "g", tmp_str)
 
     # 定義参照型画像埋め込み指定のための準備
-    tmp_str = gensub(/!\[([^\]]+)\]/, refimg_sep "\\1" refimg_sep, "g", tmp_str)
+    tmp_str = gensub(/!\[([^\]]+)\]\[([^\]]*)\]/, refimg_sep "\\1\005\\2" refimg_sep, "g", tmp_str)
     # 定義参照リンク生成のための準備
-    tmp_str = gensub(/\[([^\]]+)\]/, reflink_sep "\\1" reflink_sep, "g", tmp_str)
+    tmp_str = gensub(/\[([^\]]+)\]\[([^\]]*)\]/, reflink_sep "\\1\005\\2" reflink_sep, "g", tmp_str)
 
     output_str = tmp_str
 
