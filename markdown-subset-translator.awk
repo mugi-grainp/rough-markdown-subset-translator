@@ -34,6 +34,8 @@ BEGIN {
     #    6  inside of blockquote
     #    7  inside of table block
     block = 0
+    # ブロックの深さ
+    block_elements_depth = 0
 
     # 定義参照形式の画像とそのtitle属性を保存する連想配列
     reference_img_url["\005"] = ""
@@ -122,15 +124,19 @@ BEGIN {
 # 解釈しない
 # ===============================================================
 # ブロック要素の始点
-/<(address|article|aside|blockquote|details|dialog|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h.|header|hgroup|hr|li|main|nav|ol|p|pre|section|table|ul)>/ {
+/<(address|article|aside|blockquote|details|dialog|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h.|header|hgroup|hr|li|main|nav|ol|p|pre|section|table|ul)[^>]*>/ {
     block = 2
+    block_elements += 1
     final_output = final_output $0 "\n"
     next
 }
 
 # ブロック要素の終点
 /<\/(address|article|aside|blockquote|details|dialog|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h.|header|hgroup|hr|li|main|nav|ol|p|pre|section|table|ul)>/ {
-    block = 0
+    block_elements_depth -= 1
+    if (block_elements_depth == 0) {
+        block = 0
+    }
     final_output = final_output $0 "\n"
     next
 }
@@ -253,7 +259,6 @@ $0 ~ re_ol_top {
     }
     # HTMLブロック要素処理中は単に無視する
     else if (block == 2) {
-        final_output = final_output $0 "\n"
     }
     # インライン要素を処理
     final_output = final_output parse_span_elements($0) "\n"
