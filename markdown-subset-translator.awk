@@ -380,24 +380,9 @@ function process_list(list_depth, list_type,        output_str, pos, next_depth,
             } else if (next_depth - list_depth == -1) {
                 # 1つ浅い
                 output_str = output_str "<li>" line "</li>\n"
-                output_str = output_str "</" list_type ">\n</li>\n"
-
-                # 現在行を処理対象に加える
-                line = gensub(lv2_head, "", 1, $0)
-                # 次の行以降に1つの箇条書きの続きの文がないかチェック
-                while (1) {
-                    eof_status_2 = getline
-                    if (eof_status_2 != 0 && $0 !~ lv2_head) {
-                        line = line gensub(/^ */, "", 1, $0)
-                    }
-                    else {
-                        break
-                    }
-                }
-
-                # この時点で$0に次の行が読み込まれているので、次工程では注意
-                output_str = output_str "<li>" parse_span_elements(line) "\n"
+                output_str = output_str "</" list_type ">\n"
                 is_list_processing[list_depth] = 0
+
                 return output_str
             }
         } else {
@@ -441,9 +426,8 @@ function parse_span_elements(str,      tmp_str, output_str, link_href_and_title,
     tmp_str = gensub(/ _([^_]+)_$/, "<em>\\1</em>", "g", tmp_str)
 
     # 打ち消しの処理 (通常・行頭・行末)
-    tmp_str = gensub(/ ~~([^~]+)~~ /, "<s>\\1</s>", "g", tmp_str)
-    tmp_str = gensub(/^~~([^~]+)~~ /, "<s>\\1</s>", "g", tmp_str)
-    tmp_str = gensub(/ ~~([^~]+)~~$/, "<s>\\1</s>", "g", tmp_str)
+    # （前後空白なしを許容）
+    tmp_str = gensub(/ ?~~([^~]+)~~ ?/, "<s>\\1</s>", "g", tmp_str)
 
     # 単一フレーズのコードの処理
     tmp_str = gensub(/`([^`]+)`/, "<code>\\1</code>", "g", tmp_str)
