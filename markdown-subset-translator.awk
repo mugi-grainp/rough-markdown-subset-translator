@@ -126,19 +126,27 @@ BEGIN {
 # ブロック要素の始点
 /<(address|article|aside|blockquote|details|dialog|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h.|header|hgroup|hr|li|main|nav|ol|p|pre|section|table|ul)[^>]*>/ {
     block = 2
-    block_elements += 1
+    block_elements_depth += 1
     final_output = final_output $0 "\n"
+
+    if ($0 ~ /<\/(address|article|aside|blockquote|details|dialog|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h.|header|hgroup|hr|li|main|nav|ol|p|pre|section|table|ul)>/) {
+        close_html_block()
+    }
     next
 }
 
 # ブロック要素の終点
 /<\/(address|article|aside|blockquote|details|dialog|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h.|header|hgroup|hr|li|main|nav|ol|p|pre|section|table|ul)>/ {
+    close_html_block()
+    final_output = final_output $0 "\n"
+    next
+}
+
+function close_html_block() {
     block_elements_depth -= 1
     if (block_elements_depth == 0) {
         block = 0
     }
-    final_output = final_output $0 "\n"
-    next
 }
 
 # ===============================================================
@@ -468,6 +476,8 @@ function process_table(       eof_status, tmp_line, output_table, mode) {
         tmp_line = gensub(/^\| */, "<tr><" mode ">", 1, $0)
         tmp_line = gensub(/ *\|$/, "</" mode "></tr>", 1, tmp_line)
         tmp_line = gensub(/ *\| */, "</" mode "><" mode ">", "g", tmp_line)
+
+        tmp_line = parse_span_elements(tmp_line)
 
         output_table = output_table tmp_line "\n"
 
