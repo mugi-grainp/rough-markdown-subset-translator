@@ -417,10 +417,13 @@ function make_header_str(input_hstr,       level, output_hstr) {
 
 # 文中マークアップ要素の処理
 function parse_span_elements(str,      tmp_str, output_str, link_href_and_title, link_str, link_url, link_title) {
+    # 行末強制改行
+    tmp_str = gensub(/  $/, "<br>", "g", str)
+
     # 強調処理 (通常・行頭・行末)
     # アスタリスクは前後空白なしを許容
     # アンダースコアは文章の一部となり得やすいので空白必須
-    tmp_str = gensub(/ ?\*\*([^\*]+)\*\* ?/, "<strong>\\1</strong>", "g", str)
+    tmp_str = gensub(/ ?\*\*([^\*]+)\*\* ?/, "<strong>\\1</strong>", "g", tmp_str)
     tmp_str = gensub(/ __([^_]+)__ /, "<strong>\\1</strong>", "g", tmp_str)
     tmp_str = gensub(/^__([^_]+)__ /, "<strong>\\1</strong>", "g", tmp_str)
     tmp_str = gensub(/ __([^_]+)__$/, "<strong>\\1</strong>", "g", tmp_str)
