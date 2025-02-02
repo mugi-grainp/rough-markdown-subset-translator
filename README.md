@@ -1,5 +1,7 @@
 # rough-markdown-subset-translator
 
+[English Edition is here.](README.en.md)
+
 ## できること
 
 MarkdownをHTMLに変換します。
