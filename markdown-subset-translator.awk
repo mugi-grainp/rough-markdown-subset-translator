@@ -36,6 +36,9 @@ BEGIN {
     block = 0
     # ブロックの深さ
     block_elements_depth = 0
+    # バッククォート3つによるコードブロックであるか
+    # （空行が現れてもコードブロックを終わりにしない）
+    code_block_by_backquote = 0
 
     # 定義参照形式の画像とそのtitle属性を保存する連想配列
     reference_img_url["\005"] = ""
@@ -53,7 +56,7 @@ BEGIN {
 }
 
 # ===============================================================
-# コードブロックの処理
+# コードブロックの処理（行頭スペース）
 # <pre><code>...</code></pre>
 #
 # 特定のコードブロックにいない時に行頭スペース4つ以上の行が現れた
@@ -62,6 +65,36 @@ BEGIN {
 /(^ {4,}|^\t{1,})/ && block == 0 {
     final_output = final_output "<pre><code>" "\n"
     block = 5
+}
+
+# ===============================================================
+# コードブロックの処理（バッククォート3つ）
+# <pre><code>...</code></pre>
+#
+# 特定のコードブロックにいない時に先頭にバッククォート3つが並ぶ行
+# が現れた場合は、コードブロックを開始する。
+# コードブロック処理中にバッククォート3つが並ぶ行が現れた場合は、
+# コードブロックを終了する。
+# シンタックスハイライトプラグインに対応する
+# ===============================================================
+/^```.*/ {
+    if (block == 0) {
+        # シンタックスハイライト適用の言語指定があれば抽出
+        where = match($0, /[^`]+/)
+        if (where != 0) {
+            syntax_highlight_lang = substr($0, where, RLENGTH)
+            syntax_highlight_class = " class=\"language-" syntax_highlight_lang "\""
+        }
+
+        final_output = final_output "<pre><code" syntax_highlight_class ">" "\n"
+        block = 5
+        code_block_by_backquote = 1
+    } else if (block == 5) {
+        final_output = final_output "</code></pre>\n"
+        block = 0
+        code_block_by_backquote = 0
+    }
+    next
 }
 
 # ===============================================================
@@ -125,8 +158,11 @@ BEGIN {
 # ===============================================================
 # ブロック要素の始点
 /<(address|article|aside|blockquote|details|dialog|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h.|header|hgroup|hr|li|main|nav|ol|p|pre|section|table|ul)[^>]*>/ {
-    block = 2
-    block_elements_depth += 1
+    # コードブロック中に出現している場合はモードを変更しない
+    if (block != 5) {
+        block = 2
+        block_elements_depth += 1
+    }
     final_output = final_output $0 "\n"
 
     if ($0 ~ /<\/(address|article|aside|blockquote|details|dialog|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h.|header|hgroup|hr|li|main|nav|ol|p|pre|section|table|ul)>/) {
@@ -137,7 +173,10 @@ BEGIN {
 
 # ブロック要素の終点
 /<\/(address|article|aside|blockquote|details|dialog|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h.|header|hgroup|hr|li|main|nav|ol|p|pre|section|table|ul)>/ {
-    close_html_block()
+    # <pre>要素中に出現している場合はモードを変更しない
+    if (block != 5) {
+        close_html_block()
+    }
     final_output = final_output $0 "\n"
     next
 }
@@ -228,10 +267,15 @@ $0 ~ re_ol_top {
         }
         block = 0
     }
-    # コードブロックの終わりであれば </code></pre> を入れる
+    # 半角空白4つによるコードブロックの終わりであれば </code></pre> を入れる
+    # バッククォート3つによるコードブロックならば単に空行のままとする
     else if (block == 5) {
-        final_output = final_output "</code></pre>\n"
-        block = 0
+        if (code_block_by_backquote == 0) {
+            final_output = final_output "</code></pre>\n"
+            block = 0
+        } else {
+            final_output = final_output "\n"
+        }
     }
     # HTMLブロック要素処理中は空行のままとする
     else if (block == 2) {
@@ -260,8 +304,11 @@ $0 ~ re_ol_top {
     }
     # コードブロック内の場合、コードブロックを表現する先頭の字下げ
     # を削除
+    # （バッククォート3つによるコードブロックの場合は先頭の字下げを削除しない）
     else if (block == 5) {
-        sub(/(^ {4}|^\t)/, "", $0)
+        if (code_block_by_backquote == 0) {
+            sub(/(^ {4}|^\t)/, "", $0)
+        }
         final_output = final_output $0 "\n"
         next
     }
