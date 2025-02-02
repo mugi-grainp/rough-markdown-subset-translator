@@ -122,7 +122,7 @@ BEGIN {
 
     # 引用ブロック中の文章をMarkdownとして再解釈するため、この
     # markdown-subset-translator.awk を再帰的に呼び出す
-    bq_translate_command = "echo \"" line "\" | awk -f markdown-subset-translator.awk"
+    bq_translate_command = "echo '" line "' | awk -f markdown-subset-translator.awk"
 
     # パイブ機能とgetlineの効果により、再解釈の結果がbq_output_strに得られる
     while ((bq_translate_command | getline bq_out_buf) > 0){
