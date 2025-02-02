@@ -22,6 +22,8 @@ BEGIN {
     re_ol_top = "^[0-9]{1,}. "
     # 順序あり箇条書きリストのLv2 (最上位階層を含むすべて)
     re_ol_lv2 = "^ *[0-9]{1,}. "
+    # 全箇条書きリストの行頭文字
+    re_ul_ol_lv2 = "^ *([*+-]|[0-9]{1,}.) "
     # 終端処理用のリスト種類記憶
     list_type_for_finalization = ""
     # ブロックモード
@@ -317,7 +319,7 @@ END {
 # ===============================================================
 
 # 箇条書きリストの変換
-function process_list(list_depth, list_type,        output_str, pos, next_depth, row_head, lv2_head, line) {
+function process_list(list_depth, list_type,        output_str, pos, next_depth, row_head, line) {
     # この関数で変換する文書ブロックの最終出力
     output_str = ""
 
@@ -325,10 +327,8 @@ function process_list(list_depth, list_type,        output_str, pos, next_depth,
     # list_typeにより、行頭の正規表現を定める
     if (list_type == "ul") {
         row_head = re_ul_top
-        lv2_head = re_ul_lv2
     } else if (list_type == "ol") {
         row_head = re_ol_top
-        lv2_head = re_ol_lv2
     }
 
     # 当該階層のリスト処理をここから始める場合は開始タグを打つ
@@ -363,7 +363,7 @@ function process_list(list_depth, list_type,        output_str, pos, next_depth,
         }
 
         # 次のリストの始まりを検出した場合
-        if ($0 ~ lv2_head) {
+        if ($0 ~ re_ul_ol_lv2) {
             # ネスト段階を計算する
             pos = match($0, /^ {1,}/)
             next_depth = int((RLENGTH / 4)) + 1
@@ -372,19 +372,25 @@ function process_list(list_depth, list_type,        output_str, pos, next_depth,
             if (next_depth - list_depth == 0) {
                 # 同一レベル
                 output_str = output_str "<li>" parse_span_elements(line) "</li>\n"
-                line = gensub(lv2_head, "", 1, $0)
+                line = gensub(re_ul_ol_lv2, "", 1, $0)
             } else if (next_depth - list_depth == 1) {
                 # 1つ深い
                 output_str = output_str "<li>" parse_span_elements(line) "\n"
-                output_str = output_str process_list(list_depth + 1, list_type) "</li>\n"
+                # 次のリストがulかolか識別して処理を指定
+                if ($0 ~ re_ul_lv2) {
+                    list_type_next_depth = "ul"
+                } else if ($0 ~ re_ol_lv2) {
+                    list_type_next_depth = "ol"
+                }
+                output_str = output_str process_list(list_depth + 1, list_type_next_depth) "</li>\n"
 
                 # 最終行 or 空行検出によりリスト処理が終了している場合は、閉じタグを打つ
                 if (is_list_processing[list_depth] == 0) {
-                    output_str = output_str "</" list_type ">\n"
+                    output_str = output_str "</" list_type_next_depth ">\n"
                     return output_str
                 }
                 # 再帰から帰ってきたこの時点で$0に次の行が読み込まれている
-                line = gensub(lv2_head, "", 1, $0)
+                line = gensub(re_ul_ol_lv2, "", 1, $0)
             } else if (next_depth - list_depth == -1) {
                 # 1つ浅い
                 output_str = output_str "<li>" line "</li>\n"
