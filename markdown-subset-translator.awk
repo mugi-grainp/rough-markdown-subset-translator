@@ -472,6 +472,7 @@ function make_header_str(input_hstr,       level, output_hstr) {
 function parse_span_elements(str,      tmp_str, output_str, link_href_and_title, link_str, link_url, link_title) {
     # 行末強制改行
     tmp_str = gensub(/  $/, "<br>", "g", str)
+    tmp_str = gensub(/\\$/, "<br>", "g", tmp_str)
 
     # 強調処理 (通常・行頭・行末)
     # アスタリスクは前後空白なしを許容
