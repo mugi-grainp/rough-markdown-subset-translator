@@ -53,8 +53,9 @@ BEGIN {
     refimg_sep = "\036"
 
     # 最終出力を保存する変数
+    final_output_array[0] = ""
+    final_output_array_count = 0
     final_output = ""
-
 }
 
 # ===============================================================
@@ -65,7 +66,10 @@ BEGIN {
 # 場合
 # ===============================================================
 /(^ {4,}|^\t{1,})/ && block == 0 {
-    final_output = final_output "<pre><code>" "\n"
+    # 処理中の最後の要素について必要に応じ閉じタグを出力する
+    close_tag_if_necessary()
+
+    final_output_array[++final_output_array_count] = "<pre><code>"
     block = 5
 }
 
@@ -81,6 +85,9 @@ BEGIN {
 # ===============================================================
 /^```.*/ {
     if (block == 0) {
+        # 処理中の最後の要素について必要に応じ閉じタグを出力する
+        close_tag_if_necessary()
+
         # シンタックスハイライト適用の言語指定があれば抽出
         where = match($0, /[^`]+/)
         if (where != 0) {
@@ -88,11 +95,11 @@ BEGIN {
             syntax_highlight_class = " class=\"language-" syntax_highlight_lang "\""
         }
 
-        final_output = final_output "<pre><code" syntax_highlight_class ">" "\n"
+        final_output_array[++final_output_array_count] = "<pre><code" syntax_highlight_class ">"
         block = 5
         code_block_by_backquote = 1
     } else if (block == 5) {
-        final_output = final_output "</code></pre>\n"
+        final_output_array[++final_output_array_count] = "</code></pre>"
         block = 0
         code_block_by_backquote = 0
     }
@@ -110,6 +117,9 @@ BEGIN {
 # 行を読み込んでこのプログラムに再帰的に通す
 # ===============================================================
 /^>/ {
+    # 処理中の最後の要素について必要に応じ閉じタグを出力する
+    close_tag_if_necessary()
+
     # 引用ブロック処理モードとする
     block = 6
 
@@ -133,7 +143,8 @@ BEGIN {
     close(bq_translate_command)
 
     # 再解釈結果を出力し、引用ブロック処理を終了する
-    final_output = final_output "<blockquote>\n" bq_output_str "</blockquote>\n"
+    # （引用ブロック部分は複数行を1個の配列要素に入れる）
+    final_output_array[++final_output_array_count] = "<blockquote>\n" bq_output_str "</blockquote>"
     bq_output_str = ""
     block = 0
     next
@@ -143,11 +154,15 @@ BEGIN {
 # テーブル記法の処理
 # <table>、<tr>、<th>、<td>
 #
+# テーブル記法部分は複数行を1個の配列要素に入れる
 # 左右揃え、中央揃えはCSSと連携
 # ===============================================================
 /^\|/ {
+    # 処理中の最後の要素について必要に応じ閉じタグを出力する
+    close_tag_if_necessary()
+
     block = 7
-    final_output = final_output process_table()
+    final_output_array[++final_output_array_count] = process_table()
     block = 0
     next
 }
@@ -161,11 +176,14 @@ BEGIN {
 # ブロック要素の始点
 /<(address|article|aside|blockquote|details|dialog|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h.|header|hgroup|hr|li|main|nav|ol|p|pre|section|table|ul)[^>]*>/ {
     # コードブロック中に出現している場合はモードを変更しない
+    # それ以外の場合はモードを切り替える
     if (block != 5) {
+        # 処理中の最後の要素について必要に応じ閉じタグを出力する
+        close_tag_if_necessary()
         block = 2
         block_elements_depth += 1
     }
-    final_output = final_output $0 "\n"
+    final_output_array[++final_output_array_count] = $0
 
     if ($0 ~ /<\/(address|article|aside|blockquote|details|dialog|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h.|header|hgroup|hr|li|main|nav|ol|p|pre|section|table|ul)>/) {
         close_html_block()
@@ -179,7 +197,7 @@ BEGIN {
     if (block != 5) {
         close_html_block()
     }
-    final_output = final_output $0 "\n"
+    final_output_array[++final_output_array_count] = $0
     next
 }
 
@@ -197,7 +215,10 @@ function close_html_block() {
 # # の数で表記
 # ===============================================================
 /^#{1,6}/ {
-    final_output = final_output make_header_str($0) "\n"
+    # 処理中の最後の要素について必要に応じ閉じタグを出力する
+    close_tag_if_necessary()
+
+    final_output_array[++final_output_array_count] = make_header_str($0)
     next
 }
 
@@ -205,7 +226,10 @@ function close_html_block() {
 # 区切り線 <hr>
 # ===============================================================
 /^([\*_\-] ?){3,}$/ {
-    final_output = final_output "<hr>" "\n"
+    # 処理中の最後の要素について必要に応じ閉じタグを出力する
+    close_tag_if_necessary()
+
+    final_output_array[++final_output_array_count] = "<hr>"
     next
 }
 
@@ -217,18 +241,32 @@ function close_html_block() {
 # 行頭の箇条書き
 # アスタリスク・ハイフン・プラス記号を順序なし箇条書きの冒頭とする
 $0 ~ re_ul_top {
+    # 処理中の最後の要素について必要に応じ閉じタグを出力する
+    close_tag_if_necessary()
+
     block = 3
     list_type_for_finalization = "ul"
-    final_output = final_output process_list(1, "ul")
+    list_block_str = process_list(1, "ul")
+
+    # リスト文字列の最後の改行は削除する
+    sub(/\n$/, "", list_block_str)
+    final_output_array[++final_output_array_count] = list_block_str
     block = 0
     next
 }
 
 # 1桁以上の数字 + ピリオド + 空白を順序つき箇条書きの冒頭とする
 $0 ~ re_ol_top {
+    # 処理中の最後の要素について必要に応じ閉じタグを出力する
+    close_tag_if_necessary()
+
     block = 4
     list_type_for_finalization = "ol"
-    final_output = final_output process_list(1, "ol")
+    list_block_str = process_list(1, "ol")
+
+    # リスト文字列の最後の改行は削除する
+    sub(/\n$/, "", list_block_str)
+    final_output_array[++final_output_array_count] = list_block_str
     block = 0
     next
 }
@@ -259,29 +297,22 @@ $0 ~ re_ol_top {
 /^$/ {
     # 段落の区切りであれば </p> を入れる
     if (block == 1) {
-        # del_p_newline の指定有無による分岐は単なる出力結果の
-        # 見栄え調整のものであって、本質的ではないので除去しても
-        # 動作には問題がない
-        if (del_p_newline == 1) {
-            final_output = final_output "\n</p>\n"
-        } else {
-            final_output = final_output "</p>\n"
-        }
+        final_output_array[++final_output_array_count] = "</p>"
         block = 0
     }
     # 半角空白4つによるコードブロックの終わりであれば </code></pre> を入れる
     # バッククォート3つによるコードブロックならば単に空行のままとする
     else if (block == 5) {
         if (code_block_by_backquote == 0) {
-            final_output = final_output "</code></pre>\n"
+            final_output_array[++final_output_array_count] = "</code></pre>"
             block = 0
         } else {
-            final_output = final_output "\n"
+            final_output_array[++final_output_array_count] = ""
         }
     }
     # HTMLブロック要素処理中は空行のままとする
     else if (block == 2) {
-        final_output = final_output "\n"
+        final_output_array[++final_output_array_count] = ""
     }
     next
 }
@@ -292,15 +323,22 @@ $0 ~ re_ol_top {
 {
     # 各要素の外の場合
     if (block == 0) {
-        final_output = final_output "<p>\n"
+        final_output_array[++final_output_array_count] = "<p>"
+        # del_p_newline の指定有無による分岐は単なる出力結果の
+        # 見栄え調整のものであって、本質的ではないので除去しても
+        # 動作には問題がない
+        if (del_p_newline == 1) {
+            final_output_array[++final_output_array_count] = ""
+        }
         block = 1
     }
 
     # 段落ブロック処理中
     if (block == 1) {
-        # 段落ブロック中の改行を消去するよう外部からフラグが設定されている場合
+        # 段落ブロック中の改行を消去するよう外部からフラグが設定されている場合は
+        # 1行にまとめる
         if (del_p_newline == 1) {
-            final_output = final_output parse_span_elements($0)
+            final_output_array[final_output_array_count] = final_output_array[final_output_array_count] parse_span_elements($0)
             next
         }
     }
@@ -311,34 +349,30 @@ $0 ~ re_ol_top {
         if (code_block_by_backquote == 0) {
             sub(/(^ {4}|^\t)/, "", $0)
         }
-        final_output = final_output $0 "\n"
+        final_output_array[++final_output_array_count] = $0
         next
     }
     # HTMLブロック要素処理中は単に無視する
     else if (block == 2) {
     }
     # インライン要素を処理
-    final_output = final_output parse_span_elements($0) "\n"
+    final_output_array[++final_output_array_count] = parse_span_elements($0)
 }
 
 # ===============================================================
 # 最終行処理
 # ===============================================================
 END {
-    # ファイル末尾が箇条書きリストであった場合は、ul, olに応じた
-    # 閉じタグを出力
-    if (is_list_processing[1] == 1) {
-        final_output = final_output "</" list_type_for_finalization ">\n"
-    }
-    # 段落処理中に最終行に達した場合は段落を閉じる
-    if (block == 1) {
-        final_output = final_output "</p>\n"
-    }
-    # コードブロック処理中に最終行に達した場合はコードブロックを閉じる
-    if (block == 5) {
-        final_output = final_output "</code></pre>\n"
+    # 処理中の最後の要素について必要に応じ閉じタグを出力する
+    close_tag_if_necessary()
+    # 各要素を1つの文字列に結合
+    for (i = 1; i <= final_output_array_count; i++) {
+        final_output = final_output final_output_array[i] "\n"
     }
 
+    # -----------------------------------------------------------------------------
+    # 文字列化後の一括変換
+    # -----------------------------------------------------------------------------
     # 定義参照型画像埋め込みを変換
     for (ref in reference_link_url) {
         # 識別子指定ありの箇所を変換
@@ -540,9 +574,29 @@ function process_table(       eof_status, tmp_line, output_table, mode) {
 
         eof_status = getline
         if (eof_status == 0 || $0 == "") {
-            output_table = output_table "</table>\n"
+            output_table = output_table "</table>"
             return output_table
         }
     }
     return output_table
+}
+
+# 必要に応じ、閉じタグを出力する
+function close_tag_if_necessary() {
+    # 前行が箇条書きリストであった場合は、ul, olに応じた
+    # 閉じタグを出力
+    if (is_list_processing[1] == 1) {
+        final_output_array[++final_output_array_count] = "</" list_type_for_finalization ">"
+        block = 0
+    }
+    # 段落処理中に最終行に達した場合は段落を閉じる
+    if (block == 1) {
+        final_output_array[++final_output_array_count] = "</p>"
+        block = 0
+    }
+    # コードブロック処理中に最終行に達した場合はコードブロックを閉じる
+    if (block == 5) {
+        final_output_array[++final_output_array_count] = "</code></pre>"
+        block = 0
+    }
 }
