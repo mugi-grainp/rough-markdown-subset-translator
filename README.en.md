@@ -12,8 +12,8 @@ cannot be converted correctly depending on how they are written.
 ## Syntax supported by this script
 
 - Headings (&lt;h1&gt;, &lt;h2&gt;,...,&lt;h6&gt;)
-    - Supports only ATX style. (put # at the beginning of a line.)
-    - Not supports Underlined style yet.
+    - Supports ATX style. (put # at the beginning of a line.)
+    - Also supports Setext style (for &lt;h1&gt; and &lt;h2&gt;).
 - Paragraph (&lt;p&gt;)
 - Lists (&lt;ul&gt;, &lt;ol&gt;)
     - Supports nested lists.
@@ -73,5 +73,4 @@ available.
 
 ## Future work
 
-- Headings syntax (Underlined style.)
 - Table alignment syntax

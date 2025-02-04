@@ -12,7 +12,8 @@ MarkdownをHTMLに変換します。
 ## 変換できる文法
 
 - 見出し
-    - 現在、Atx-styleの一部 ( # : NUMBER SIGN U+0023 を行頭にだけ置く形のもの) に対応
+    - ATX style
+    - Setext style
 - 段落
 - 箇条書き（入れ子・複数階層に対応）
     - 順序付きリスト (&lt;ol&gt;)
@@ -41,9 +42,6 @@ MarkdownをHTMLに変換します。
 
 ### もとのMarkdownに存在する文法
 
-- 見出し
-    - Atx-styleのうち、# を行末にも置く形のもの
-    - Underlined-styleのH1、H2見出し (処理再実装の都合上、このバージョンではまだ実装していません)
 - Automatic Link
 
 ### もとのMarkdownには存在しないが、各種サービスで広く実装されている文法
@@ -71,5 +69,4 @@ pandocなどのMarkdown変換プログラムが何らかの理由で利用でき
 
 ## Future Work
 
-- Underlined-styleのH1、H2見出しへの対応
 - テーブル記法への完全対応
