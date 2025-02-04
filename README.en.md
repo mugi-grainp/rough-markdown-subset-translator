@@ -74,3 +74,4 @@ available.
 ## Future work
 
 - Table alignment syntax
+- footnotes syntax
