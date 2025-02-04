@@ -540,7 +540,14 @@ function make_header_str(input_hstr,       level, output_hstr) {
     level = length(buf[1])
     output_hstr = buf[2]
 
-    for (i = 3; i <= count; i++) { output_hstr = output_hstr " " buf[i] }
+    for (i = 3; i <= count - 1; i++) {
+        output_hstr = output_hstr " " buf[i]
+    }
+    # 最後の分割項目が # のみ（ATX Styleの後ろの記号）ならば削除
+    # そうでなければ出力
+    if (count >= 3 && buf[count] !~ /^#+$/) {
+        output_hstr = output_hstr " " buf[count]
+    }
     return "<h" level ">" output_hstr "</h" level ">"
 }
 
