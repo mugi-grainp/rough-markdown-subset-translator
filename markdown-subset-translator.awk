@@ -212,7 +212,7 @@ function close_html_block() {
 # 見出しの処理
 # <h1> ～ <h6>
 #
-# # の数で表記
+# # の数で表記 (ATX Style)
 # ===============================================================
 /^#{1,6}/ {
     # 処理中の最後の要素について必要に応じ閉じタグを出力する
@@ -221,6 +221,46 @@ function close_html_block() {
     final_output_array[++final_output_array_count] = make_header_str($0)
     next
 }
+
+# ===============================================================
+# 見出しのうち、H1に対する特別記法
+# (Setext style)
+#
+# 3個以下のスペースから始まり、1個以上の = が続く
+# 1つ上の行に文字列がある場合のみ対応
+# (この時、プログラムは一旦段落処理モード (block = 1))
+# ===============================================================
+/ {,3}=+$/ && block == 1 {
+    if (final_output_array[final_output_array_count] != "" && final_output_array[final_output_array_count] !~ / {,3}=+$/) {
+        # 見出し生成
+        final_output_array[final_output_array_count] = "<h1>" final_output_array[final_output_array_count] "</h1>"
+        # 一旦挿入された <p> タグを消去（後処理のため特殊文字を入れて削除フラグ扱い）
+        final_output_array[final_output_array_count - 1] = "\033"
+        # ブロックモードを解除
+        block = 0
+        next
+    }
+}
+
+# ===============================================================
+# 見出しのうち、H2に対する特別記法
+# (Setext style)
+#
+# 3個以下のスペースから始まり、1個以上の - が続く
+# 1つ上の行に - 以外の文字列がある場合のみ対応
+# (この時、プログラムは一旦段落処理モード (block = 1))
+# ===============================================================
+/ {,3}-+$/ && block == 1 {
+    if (final_output_array[final_output_array_count] != "" && final_output_array[final_output_array_count] !~ / {,3}-+$/) {
+        final_output_array[final_output_array_count] = "<h2>" final_output_array[final_output_array_count] "</h2>"
+        # 一旦挿入された <p> タグを消去（後処理のため特殊文字を入れて削除フラグ扱い）
+        final_output_array[final_output_array_count - 1] = "\033"
+        # ブロックモードを解除
+        block = 0
+        next
+    }
+}
+
 
 # ===============================================================
 # 区切り線 <hr>
@@ -367,6 +407,8 @@ END {
     close_tag_if_necessary()
     # 各要素を1つの文字列に結合
     for (i = 1; i <= final_output_array_count; i++) {
+        # 特殊文字による削除扱い行は飛ばす
+        if (final_output_array[i] == "\033") { continue }
         final_output = final_output final_output_array[i] "\n"
     }
 
