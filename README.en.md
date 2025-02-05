@@ -11,6 +11,8 @@ cannot be converted correctly depending on how they are written.
 
 ## Syntax supported by this script
 
+### Basic syntax
+
 - Headings (&lt;h1&gt;, &lt;h2&gt;,...,&lt;h6&gt;)
     - Supports ATX style. (put # at the beginning of a line.)
     - Also supports Setext style (for &lt;h1&gt; and &lt;h2&gt;).
@@ -30,12 +32,18 @@ cannot be converted correctly depending on how they are written.
     - Emphasis (&lt;em&gt;): single asterisk or underscore.
     - Strong Emphasis (&lt;strong&gt;): double asterisks or underscores.
     - Strikethrough (&lt;s&gt;)
-- Table
-    - Supports pipe table syntax.
-        - Not supports column alignment yet.
 - Image file insertion (&lt;img&gt;)
     - Supports inline syntax.
     - Also supports reference definitions syntax.
+
+### Popular extended syntax
+
+- Table
+    - Supports pipe table syntax.
+        - Not supports column alignment yet.
+- Footnote
+
+### Others
 
 This program outputs other than the above syntax and HTML tags as is. 
 
@@ -74,4 +82,3 @@ available.
 ## Future work
 
 - Table alignment syntax
-- footnotes syntax

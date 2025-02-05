@@ -42,15 +42,19 @@ BEGIN {
     # （空行が現れてもコードブロックを終わりにしない）
     code_block_by_backquote = 0
 
-    # 定義参照形式の画像とそのtitle属性を保存する連想配列
-    reference_img_url["\005"] = ""
-    reference_img_title["\005"] = ""
-    # 定義参照形式のリンクとそのtitle属性を保存する連想配列
+    # 定義参照形式のリンク・画像埋め込みとそのtitle属性を保存する連想配列
     reference_link_url["\005"] = ""
     reference_link_title["\005"] = ""
+    # 脚注のキーの出現順序と本文を保存する連想配列
+    footnote_order["\005"] = ""
+    footnote_text["\005"] = ""
+    footnote_count = 0
+
     # 定義参照区切り記号
     reflink_sep = "\035"
     refimg_sep = "\036"
+    # 脚注記法区切り記号
+    footnote_sep = "\037"
 
     # 最終出力を保存する変数
     final_output_array[0] = ""
@@ -312,9 +316,21 @@ $0 ~ re_ol_top {
 }
 
 # ===============================================================
-# 定義参照形式のリンク処理
+# 脚注記法の本体処理
+# 角括弧内の冒頭が ^ (ハット) であるものを脚注記法とする
+# ===============================================================
+/^\[\^.+\]: +.+/ {
+    fkey = gensub(/^\[\^([^\]]+)\]: +.+/, "\\1", 1, $0)
+    if (!(fkey in footnote_order)) {
+        footnote_text[fkey] = parse_span_elements(gensub(/^\[[^\]]+\]: +([^ ]+)/, "\\1", 1, $0))
+    }
+    next
+}
+
+# ===============================================================
+# 定義参照形式のリンク・画像埋め込み処理
 #
-# リンクの定義がリンクの参照部分以降に来る
+# リンク・画像パスの定義がリンク・画像の参照部分以降に来る
 # 定義参照部分の変換をここで行う
 # ===============================================================
 /^\[.+\]: +.+/ {
@@ -409,12 +425,32 @@ END {
     for (i = 1; i <= final_output_array_count; i++) {
         # 特殊文字による削除扱い行は飛ばす
         if (final_output_array[i] == "\033") { continue }
+
+        # 脚注記法の処理
+        # 脚注記法の出現順序記録処理
+        # 脚注記法区切りで文章を分割すると、偶数番目要素が必ず脚注となる
+        split_count = split(final_output_array[i], row_elem, footnote_sep)
+        if (split_count > 1) {
+            for (j = 2; j <= split_count; j++) {
+                if (j % 2 == 0 && !(row_elem[j] in footnote_order)) {
+                    footnote_order[row_elem[j]] = ++footnote_count
+                }
+            }
+        }
+        # 文字列連結
         final_output = final_output final_output_array[i] "\n"
     }
+    # 脚注を出力（存在しない場合は出力されない）
+    final_output = final_output output_footnote()
 
     # -----------------------------------------------------------------------------
     # 文字列化後の一括変換
     # -----------------------------------------------------------------------------
+    # 脚注へのリンクを生成
+    for (key in footnote_order) {
+        final_output = gensub(footnote_sep key footnote_sep, "<sup>[<a href=\"#footnote-tag-" key "\">" footnote_order[key] "</a>]</sup>", "g", final_output)
+    }
+
     # 定義参照型画像埋め込みを変換
     for (ref in reference_link_url) {
         # 識別子指定ありの箇所を変換
@@ -585,10 +621,14 @@ function parse_span_elements(str,      tmp_str, output_str, link_href_and_title,
     # title属性の指定がない場合は、title属性の定義を消去する
     tmp_str = gensub(/ title=""/, "", "g", tmp_str)
 
+
     # 文中リンク文字列の処理
     tmp_str = gensub(/\[([^\]]+)\]\(([^\) ]+) ?(['"](.+)['"])*\)/, "<a href=\"\\2\" title=\"\\4\">\\1</a>", "g", tmp_str)
     # title属性の指定がない場合は、title属性の定義を消去する
     tmp_str = gensub(/ title=""/, "", "g", tmp_str)
+
+    # 脚注記法のための準備
+    tmp_str = gensub(/\[\^([^\]]+)\]/, footnote_sep "\\1" footnote_sep, "g", tmp_str)
 
     # 定義参照型画像埋め込み指定のための準備
     tmp_str = gensub(/!\[([^\]]+)\]\[([^\]]*)\]/, refimg_sep "\\1\005\\2" refimg_sep, "g", tmp_str)
@@ -648,4 +688,36 @@ function close_tag_if_necessary() {
         final_output_array[++final_output_array_count] = "</code></pre>"
         block = 0
     }
+}
+
+# 文書末に脚注を出力する
+function output_footnote(      footnote_list_array, footnote_key_array, footnote_output_array, footnote_output_array_count, footnote_output_str) {
+    # 脚注が存在しない場合は何も出力せずに終了
+    if (footnote_count == 0) { return "" }
+
+    footnote_output_array[0] = ""
+    footnote_output_array_count = 0
+
+    # 脚注を出現順序に従って並べ替える
+    for (key in footnote_order) {
+        footnote_list_array[footnote_order[key]] = footnote_text[key]
+        footnote_key_array[footnote_order[key]] = key
+    }
+
+    footnote_output_array[++footnote_output_array_count] = "<section class=\"footnotes\">"
+    footnote_output_array[++footnote_output_array_count] = "    <ol>"
+
+    for (i = 1; i <= footnote_count; i++) {
+        footnote_output_array[++footnote_output_array_count] = "        <li id=\"footnote-tag-" footnote_key_array[i] "\">" footnote_list_array[i] "</li>"
+    }
+
+    footnote_output_array[++footnote_output_array_count] = "    </ol>"
+    footnote_output_array[++footnote_output_array_count] = "</section>"
+
+    # 1つの文字列にして出力
+    for (i = 1; i <= footnote_output_array_count; i++) {
+        footnote_output_str = footnote_output_str footnote_output_array[i] "\n"
+    }
+
+    return footnote_output_str
 }
