@@ -40,7 +40,6 @@ cannot be converted correctly depending on how they are written.
 
 - Table
     - Supports pipe table syntax.
-        - Not supports column alignment yet.
 - Footnote
 
 ### Others
@@ -64,13 +63,19 @@ Outputs conversion results to STDOUT.
 The following items can be configured, using the AWK v option.
 
 - `del_p_newline`
-    - Remove line breaks in paragraph tag (&lt;p&gt;).
+    - When this option is set to 1, Remove line breaks in paragraph tag (&lt;
+      p&gt;).
     - This option is useful for languages that do not use word divider
       (whitespace between words) such as Japanese language and Chinese
       language.
+- `th_always_center`
+    - When this option is set to 1, the style attribute (CSS) is set so that
+      Table header cells (&lt;th&gt;) are always centered when processing table
+      syntax.
 
 ```bash
 awk -f markdown-subset-translator.awk -v del_p_newline=1 [FILE]
+awk -f markdown-subset-translator.awk -v th_always_center=1 [FILE]
 ```
 
 ## Usecases
@@ -79,6 +84,3 @@ This script helps convert Markdown written using only basic syntax to HTML in
 environments where Markdown conversion programs such as pandoc are not
 available.
 
-## Future work
-
-- Table alignment syntax
