@@ -9,6 +9,7 @@
 #
 # 外部オプション
 #   del_p_newline: 1のとき、<p>段落中の改行を除去する
+#   th_always_center: 1のとき、テーブル記法でのタイトル行を常に中央揃えにする
 
 BEGIN {
     # ある深さのリストを処理中であるかのフラグ
@@ -641,32 +642,75 @@ function parse_span_elements(str,      tmp_str, output_str, link_href_and_title,
 }
 
 # テーブル記法の処理
-function process_table(       eof_status, tmp_line, output_table, mode) {
+function process_table(       eof_status, tmp_line, output_th, output_table_array, output_table, output_count, row_mode, alignment_attr_str, i) {
     # 処理モード (th, td)
-    mode = "th"
-    output_table = "<table>\n"
+    row_mode = "th"
+    # 各列の揃え位置を設定するHTMLのstyle属性
+    alignment_attr_str[0] = ""
+    # 出力
+    output_table_array[1] = "<table>"
+    output_table = ""
+    output_count = 1
 
     while(1) {
-        # ヘッダとデータを区切る線まで来たらヘッダモードからデータモードへ移行
+        # ヘッダとデータを区切る線まで来たら、文字揃え指定を判定
         if ($0 ~ /^[-\|:]+$/) {
-            mode = "td"
+            column_count = split($0, alignment_row_elem, "|")
+            for (i = 2; i < column_count; i++) {
+                if (alignment_row_elem[i] ~ /^:-+:$/) { alignment_attr_str[i - 1] = " style=\"text-align:center;\"" }
+                else if (alignment_row_elem[i] ~ /-+:$/) { alignment_attr_str[i - 1] = " style=\"text-align:right;\"" }
+                else if (alignment_row_elem[i] ~ /:-+$/) { alignment_attr_str[i - 1] = " style=\"text-align:left;\"" }
+                else { alignment_attr_str[i - 1] = "" }
+            }
+
+            # ヘッダモードからデータモードへ移行
+            row_mode = "td"
             getline
             continue
         }
-        tmp_line = gensub(/^\| */, "<tr><" mode ">", 1, $0)
-        tmp_line = gensub(/ *\|$/, "</" mode "></tr>", 1, tmp_line)
-        tmp_line = gensub(/ *\| */, "</" mode "><" mode ">", "g", tmp_line)
 
+        # タグ変換
+        tmp_line = gensub(/^\| */, "<tr><" row_mode ">", 1, $0)
+        tmp_line = gensub(/ *\|$/, "</" row_mode "></tr>", 1, tmp_line)
+        tmp_line = gensub(/ *\| */, "</" row_mode "><" row_mode ">", "g", tmp_line)
+
+        # セル内のMarkdown記法を解釈
         tmp_line = parse_span_elements(tmp_line)
 
-        output_table = output_table tmp_line "\n"
+        # ヘッダは別途保持する
+        if (row_mode == "th") {
+            output_th = tmp_line
+            if (th_always_center == 1) {
+                # ヘッダを常時通常揃えにする外部オプションが指定されている場合
+                output_th = gensub(/<th>/, "<th style=\"text-align:center;\">", "g", output_th)
+                # 置換結果を行処理にも反映
+                tmp_line = output_th
+            }
+        }
+
+        # 出力バッファに登録
+        output_table_array[++output_count] = tmp_line
 
         eof_status = getline
         if (eof_status == 0 || $0 == "") {
-            output_table = output_table "</table>"
-            return output_table
+            output_table_array[++output_count] = "</table>"
+            break
         }
     }
+
+    # 出力生成
+    # 行タイトルの揃え位置指定を反映
+    output_table_array[2] = output_th
+
+    for (j = 1; j < output_count; j++) {
+        # 各列の揃え位置指定を反映する
+        for (k = 1; k <= column_count; k++) {
+            output_table_array[j] = gensub(/<(t[hd])>/, "<\\1" alignment_attr_str[k] ">", 1, output_table_array[j])
+        }
+        output_table = output_table output_table_array[j] "\n"
+    }
+    # 最終行（</table>タグ）は改行を付けない
+    output_table = output_table output_table_array[output_count]
     return output_table
 }
 
