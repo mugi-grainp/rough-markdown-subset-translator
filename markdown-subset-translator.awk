@@ -513,10 +513,11 @@ function process_list(list_depth, list_type,        output_str, pos, next_depth,
         # ファイル終端、または空行に行き当たったらリスト1個の終わりとする
         if (eof_status == 0 || $0 == "") {
             output_str = output_str "<li>" parse_span_elements(line) "</li>\n"
-            output_str = output_str "</" list_type ">\n"
+
 
             # 全ての深さについてリスト処理の終了を設定
             for (i = 1; i <= list_depth; i++) {
+                output_str = output_str "</" list_type ">\n"
                 is_list_processing[i] = 0
             }
             return output_str
@@ -542,20 +543,39 @@ function process_list(list_depth, list_type,        output_str, pos, next_depth,
                 } else if ($0 ~ re_ol_lv2) {
                     list_type_next_depth = "ol"
                 }
-                output_str = output_str process_list(list_depth + 1, list_type_next_depth) "</li>\n"
+
+                recursive_result = process_list(list_depth + 1, list_type_next_depth)
+                if (recursive_result !~ /<\/li>\n?$/) {
+                    output_str = output_str recursive_result "</li>\n"
+                } else {
+                    output_str = output_str recursive_result
+                }
 
                 # 最終行 or 空行検出によりリスト処理が終了している場合は、閉じタグを打つ
                 if (is_list_processing[list_depth] == 0) {
-                    output_str = output_str "</" list_type_next_depth ">\n"
+                    if (list_depth == 1) {
+                        output_str = output_str "</" list_type_next_depth ">\n"
+                    }
                     return output_str
                 }
                 # 再帰から帰ってきたこの時点で$0に次の行が読み込まれている
+                # リストが2つ以上階層を遡って戻ってきた場合に対応するため、
+                # ここで現在行のネスト段階を求め直す
+                pos = match($0, /^ {1,}/)
+                list_depth = int((RLENGTH / 4)) + 1
+
                 line = gensub(re_ul_ol_lv2, "", 1, $0)
-            } else if (next_depth - list_depth == -1) {
-                # 1つ浅い
-                output_str = output_str "<li>" line "</li>\n"
+            } else if (next_depth - list_depth < 0) {
+                # 1つ以上浅い
+                depth_diff_count = -(next_depth - list_depth)
+                output_str = output_str "<li>" parse_span_elements(line) "</li>\n"
+                for (i = 0; i < depth_diff_count - 1; i++) {
+                    output_str = output_str "</" list_type ">\n</li>\n"
+                }
                 output_str = output_str "</" list_type ">\n"
-                is_list_processing[list_depth] = 0
+                for (i = 0; i <= depth_diff_count - 1; i++) {
+                    is_list_processing[list_depth - i] = 0
+                }
 
                 return output_str
             }
