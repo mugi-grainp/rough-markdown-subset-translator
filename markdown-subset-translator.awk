@@ -13,7 +13,8 @@
 
 BEGIN {
     # ある深さのリストを処理中であるかのフラグ
-    is_list_processing[1] = 0
+    #   処理中ではない: "" (空白) / 処理中である: "ul" or "ol")
+    processing_list_type[1] = ""
     # 順序なし箇条書きリストの最上位階層
     # re_ul_top = /^[\*+\-] /
     re_ul_top = "^[*+-] "
@@ -492,9 +493,9 @@ function process_list(list_depth, list_type,        output_str, pos, next_depth,
     }
 
     # 当該階層のリスト処理をここから始める場合は開始タグを打つ
-    if (is_list_processing[list_depth] != 1) {
+    if (processing_list_type[list_depth] == "") {
         output_str = output_str "<" list_type ">\n"
-        is_list_processing[list_depth] = 1
+        processing_list_type[list_depth] = list_type
     }
 
     line = $0
@@ -516,9 +517,13 @@ function process_list(list_depth, list_type,        output_str, pos, next_depth,
 
 
             # 全ての深さについてリスト処理の終了を設定
-            for (i = 1; i <= list_depth; i++) {
-                output_str = output_str "</" list_type ">\n"
-                is_list_processing[i] = 0
+            for (i = list_depth; i > 1; i--) {
+                output_str = output_str "</" processing_list_type[i] ">\n</li>\n"
+                processing_list_type[i] = ""
+            }
+            if (processing_list_type[1] != "") {
+                output_str = output_str "</" processing_list_type[1] ">\n"
+                processing_list_type[1] = ""
             }
             return output_str
         }
@@ -545,17 +550,10 @@ function process_list(list_depth, list_type,        output_str, pos, next_depth,
                 }
 
                 recursive_result = process_list(list_depth + 1, list_type_next_depth)
-                if (recursive_result !~ /<\/li>\n?$/) {
-                    output_str = output_str recursive_result "</li>\n"
-                } else {
-                    output_str = output_str recursive_result
-                }
+                output_str = output_str recursive_result
 
-                # 最終行 or 空行検出によりリスト処理が終了している場合は、閉じタグを打つ
-                if (is_list_processing[list_depth] == 0) {
-                    if (list_depth == 1) {
-                        output_str = output_str "</" list_type_next_depth ">\n"
-                    }
+                # 最終行 or 空行検出によりリスト処理が終了している場合
+                if (processing_list_type[list_depth] == "") {
                     return output_str
                 }
                 # 再帰から帰ってきたこの時点で$0に次の行が読み込まれている
@@ -569,12 +567,9 @@ function process_list(list_depth, list_type,        output_str, pos, next_depth,
                 # 1つ以上浅い
                 depth_diff_count = -(next_depth - list_depth)
                 output_str = output_str "<li>" parse_span_elements(line) "</li>\n"
-                for (i = 0; i < depth_diff_count - 1; i++) {
-                    output_str = output_str "</" list_type ">\n</li>\n"
-                }
-                output_str = output_str "</" list_type ">\n"
-                for (i = 0; i <= depth_diff_count - 1; i++) {
-                    is_list_processing[list_depth - i] = 0
+                for (i = list_depth; i > next_depth; i--) {
+                    output_str = output_str "</" processing_list_type[i] ">\n</li>\n"
+                    processing_list_type[i] = ""
                 }
 
                 return output_str
@@ -738,7 +733,7 @@ function process_table(       eof_status, tmp_line, output_th, output_table_arra
 function close_tag_if_necessary() {
     # 前行が箇条書きリストであった場合は、ul, olに応じた
     # 閉じタグを出力
-    if (is_list_processing[1] == 1) {
+    if (processing_list_type[1] != "") {
         final_output_array[++final_output_array_count] = "</" list_type_for_finalization ">"
         block = 0
     }
