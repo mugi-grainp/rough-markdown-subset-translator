@@ -439,8 +439,10 @@ END {
                 }
             }
         }
+        # 行結合によって発見できるようになったインライン要素の再処理
+        final_output_row = parse_span_elements(final_output_array[i])
         # 文字列連結
-        final_output = final_output final_output_array[i] "\n"
+        final_output = final_output final_output_row "\n"
     }
     # 脚注を出力（存在しない場合は出力されない）
     final_output = final_output output_footnote()

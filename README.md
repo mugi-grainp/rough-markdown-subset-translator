@@ -53,7 +53,9 @@ MarkdownをHTMLに変換します。
 
 単にawkプログラムとして呼び出してください。
 
-    awk -f markdown-subset-translator.awk [FILE]
+```bash
+awk -f markdown-subset-translator.awk [FILE]
+```
 
 ### 指定できるオプション
 
@@ -61,14 +63,15 @@ awkのvオプションを使って、プログラム外から動作を設定で�
 同時に設定可能です。
 
 - `del_p_newline` オプション
-    - 1に設定すると、段落ブロックを&lt;p&gt;タグで囲う際に、段落中にある改行を
-      すべて除去します。
+    - 1に設定すると、段落ブロックを&lt;p&gt;タグで囲う際に、段落中にある改行をすべて除去します。
+    - この時、行をまたがって設定されていたインライン要素が追加で解釈されます。
 - `th_always_center` オプション
-    - 1に設定すると、テーブル記法を処理する際に列タイトル（&lt;th&gt;タグ）を常
-      に中央揃えで出力するようstyle属性を設定します。
+    - 1に設定すると、テーブル記法を処理する際に列タイトル（&lt;th&gt;タグ）を常に中央揃えで出力するようstyle属性を設定します。
 
-    awk -f markdown-subset-translator.awk -v del_p_newline=1 [FILE]
-    awk -f markdown-subset-translator.awk -v th_always_center=1 [FILE]
+```bash
+awk -f markdown-subset-translator.awk -v del_p_newline=1 [FILE]
+awk -f markdown-subset-translator.awk -v th_always_center=1 [FILE]
+```
 
 ## 利用場面
 

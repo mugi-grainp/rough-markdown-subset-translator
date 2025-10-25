@@ -64,8 +64,8 @@ The following items can be configured, using the AWK v option.
 
 - `del_p_newline`
     - When this option is set to 1, Remove line breaks in paragraph tag (&lt;
-      p&gt;).
-    - This option is useful for languages that do not use word divider
+      p&gt;) and interpret line-spanning text emphasis syntax.
+    - This option is also useful for languages that do not use word divider
       (whitespace between words) such as Japanese language and Chinese
       language.
 - `th_always_center`
