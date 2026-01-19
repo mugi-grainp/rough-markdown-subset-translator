@@ -9,6 +9,12 @@ MarkdownをHTMLに変換します。
 一部の文法にしか対応していませんが、世界の8割のMarkdownは
 これで十分に変換できるかもしれません。
 
+## スクリプトについて（2026.01.19追記）
+
+複雑なMarkdownの変換に失敗する事例を減らすため、ChatGPTを活用した改善を実施しました。
+`markdown-subset-translator.awk` は改善版です。
+従来版は `markdown-subset-translator.original.awk` として引き続き公開しています。
+
 ## 変換できる文法
 
 ### 基礎的な文法
@@ -52,6 +58,7 @@ MarkdownをHTMLに変換します。
 ## 使い方
 
 単にawkプログラムとして呼び出してください。
+なお、スクリプト中の置換関数としてgensubを利用しているため、GNU Awk (gawk) でのみ処理可能です。
 
 ```bash
 awk -f markdown-subset-translator.awk [FILE]
@@ -59,8 +66,7 @@ awk -f markdown-subset-translator.awk [FILE]
 
 ### 指定できるオプション
 
-awkのvオプションを使って、プログラム外から動作を設定できます。オプションは複数
-同時に設定可能です。
+awkのvオプションを使って、プログラム外から動作を設定できます。オプションは複数同時に設定可能です。
 
 - `del_p_newline` オプション
     - 1に設定すると、段落ブロックを&lt;p&gt;タグで囲う際に、段落中にある改行をすべて除去します。

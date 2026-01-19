@@ -45,19 +45,16 @@ BEGIN {
     code_block_by_backquote = 0
 
     # 定義参照形式のリンク・画像埋め込みとそのtitle属性を保存する連想配列
-    reference_link_url["\006"] = ""
-    reference_link_title["\006"] = ""
+    reference_link_url["\005"] = ""
+    reference_link_title["\005"] = ""
     # 脚注のキーの出現順序と本文を保存する連想配列
-    footnote_order["\006"] = ""
-    footnote_text["\006"] = ""
+    footnote_order["\005"] = ""
+    footnote_text["\005"] = ""
     footnote_count = 0
 
     # 定義参照区切り記号
-    reflink_start_sep = "\035\021"
-    reflink_end_sep = "\035\023"
-    refimg_start_sep = "\036\021"
-    refimg_end_sep = "\036\023"
-    codeph_sep = "\034"
+    reflink_sep = "\035"
+    refimg_sep = "\036"
     # 脚注記法区切り記号
     footnote_sep = "\037"
 
@@ -97,10 +94,6 @@ BEGIN {
         # 処理中の最後の要素について必要に応じ閉じタグを出力する
         close_tag_if_necessary()
 
-        # フェンスコードブロック開始時に状態をリセット
-        syntax_highlight_lang = ""
-        syntax_highlight_class = ""
-
         # シンタックスハイライト適用の言語指定があれば抽出
         where = match($0, /[^`]+/)
         if (where != 0) {
@@ -115,8 +108,6 @@ BEGIN {
         final_output_array[++final_output_array_count] = "</code></pre>"
         block = 0
         code_block_by_backquote = 0
-        syntax_highlight_lang = ""
-        syntax_highlight_class = ""
     }
     next
 }
@@ -221,43 +212,6 @@ function close_html_block() {
     if (block_elements_depth == 0) {
         block = 0
     }
-}
-
-function escape_html(str,    out) {
-    out = str
-    gsub(/&/, "&amp;", out)
-    gsub(/</, "&lt;", out)
-    gsub(/>/, "&gt;", out)
-    return out
-}
-
-# 定義参照ラベルの正規化（Markdownの一般的な挙動に寄せる）
-# - 前後空白を除去
-# - 連続空白/タブを1スペースに圧縮
-# - 小文字化
-function normalize_ref_label(label,    s) {
-    s = label
-    gsub(/^[ 	]+|[ 	]+$/, "", s)
-    gsub(/[ 	]+/, " ", s)
-    s = tolower(s)
-    return s
-}
-
-# <li> 内の複数段落（空行区切り）をHTMLに整形する
-function format_list_item(text,    parts, n, i, out, p) {
-    n = split(text, parts, "\n\n+")
-    out = ""
-    for (i = 1; i <= n; i++) {
-        p = parts[i]
-        gsub(/^[ 	]+|[ 	]+$/, "", p)
-        if (p == "") { continue }
-        if (out == "") {
-            out = parse_span_elements(p)
-        } else {
-            out = out "<p>" parse_span_elements(p) "</p>"
-        }
-    }
-    return out
 }
 
 # ===============================================================
@@ -382,8 +336,7 @@ $0 ~ re_ol_top {
 # 定義参照部分の変換をここで行う
 # ===============================================================
 /^\[.+\]: +.+/ {
-    raw_link_string = gensub(/^\[([^\]]+)\]: +.+/, "\\1", 1, $0)
-    link_string = normalize_ref_label(raw_link_string)
+    link_string = gensub(/^\[([^\]]+)\]: +.+/, "\\1", 1, $0)
     link_url    = gensub(/^\[[^\]]+\]: +([^ ]+) ?.*/, "\\1", 1, $0)
     link_title  = gensub(/^\[[^\]]+\]: +[^ ]+ ?(["'\(](.+)["'\)])*/, "\\2", 1, $0)
 
@@ -504,12 +457,19 @@ END {
 
     # 定義参照型画像埋め込みを変換
     for (ref in reference_link_url) {
-        final_output = gensub(refimg_start_sep "([^\005\n]+)\005" ref refimg_end_sep, "<img src=\"" reference_link_url[ref] "\" title=\"" reference_link_title[ref] "\" alt=\"\\1\">", "g", final_output)
+        # 識別子指定ありの箇所を変換
+        final_output = gensub(refimg_sep "([^\005\n]+)\005" ref refimg_sep, "<img src=\"" reference_link_url[ref] "\" title=\"" reference_link_title[ref] "\" alt=\"\\1\">", "g", final_output)
+        # 識別子指定なしの箇所を変換
+        final_output = gensub(refimg_sep ref "\005" refimg_sep, "<img src=\"" reference_link_url[ref] "\" title=\"" reference_link_title[ref] "\" alt=\"" ref "\">", "g", final_output)
     }
 
     # 定義参照リンクを変換
     for (ref in reference_link_url) {
-        final_output = gensub(reflink_start_sep "([^\005\n]+)\005" ref reflink_end_sep, "<a href=\"" reference_link_url[ref] "\" title=\"" reference_link_title[ref] "\">\\1</a>", "g", final_output)
+        # 識別子指定ありの箇所を変換
+        final_output = gensub(reflink_sep "([^\005\n]+)\005" ref reflink_sep, "<a href=\"" reference_link_url[ref] "\" title=\"" reference_link_title[ref] "\">\\1</a>", "g", final_output)
+        # final_output = gensub(reflink_sep "[^\005\n]+\005" ref reflink_sep, "HHH", "g", final_output)
+        # 識別子指定なしの箇所を変換
+        final_output = gensub(reflink_sep ref "\005" reflink_sep, "<a href=\"" reference_link_url[ref] "\" title=\"" reference_link_title[ref] "\">" ref "</a>", "g", final_output)
     }
     # 定義参照型の画像埋め込み・リンクにおいてtitle属性の指定がない場合は、title属性の定義を消去する
     gsub(/ title=""/, "", final_output)
@@ -555,7 +515,7 @@ function process_list(list_depth, list_type,        output_str, pos, next_depth,
 
         # ファイル終端、または空行に行き当たったらリスト1個の終わりとする
         if (eof_status == 0 || $0 == "") {
-            output_str = output_str "<li>" format_list_item(line) "</li>\n"
+            output_str = output_str "<li>" parse_span_elements(line) "</li>\n"
 
 
             # 全ての深さについてリスト処理の終了を設定
@@ -570,12 +530,6 @@ function process_list(list_depth, list_type,        output_str, pos, next_depth,
             return output_str
         }
 
-        # 空行だが空白文字のみの場合は、同一<li>内の段落区切りとして扱う
-        if ($0 ~ /^[ \t]+$/) {
-            line = line "\n\n"
-            continue
-        }
-
         # 次のリストの始まりを検出した場合
         if ($0 ~ re_ul_ol_lv2) {
             # ネスト段階を計算する
@@ -585,7 +539,7 @@ function process_list(list_depth, list_type,        output_str, pos, next_depth,
             # ネスト段階の変化による分岐
             if (next_depth - list_depth == 0) {
                 # 同一レベル
-                output_str = output_str "<li>" format_list_item(line) "</li>\n"
+                output_str = output_str "<li>" parse_span_elements(line) "</li>\n"
                 line = gensub(re_ul_ol_lv2, "", 1, $0)
             } else if (next_depth - list_depth == 1) {
                 # 1つ深い
@@ -614,7 +568,7 @@ function process_list(list_depth, list_type,        output_str, pos, next_depth,
             } else if (next_depth - list_depth < 0) {
                 # 1つ以上浅い
                 depth_diff_count = -(next_depth - list_depth)
-                output_str = output_str "<li>" format_list_item(line) "</li>\n"
+                output_str = output_str "<li>" parse_span_elements(line) "</li>\n"
                 for (i = list_depth; i > next_depth; i--) {
                     output_str = output_str "</" processing_list_type[i] ">\n</li>\n"
                     processing_list_type[i] = ""
@@ -652,20 +606,10 @@ function make_header_str(input_hstr,       level, output_hstr) {
 }
 
 # 文中マークアップ要素の処理
-function parse_span_elements(str,      tmp_str, output_str, link_href_and_title, link_str, link_url, link_title, i) {
+function parse_span_elements(str,      tmp_str, output_str, link_href_and_title, link_str, link_url, link_title) {
     # 行末強制改行
     tmp_str = gensub(/  $/, "<br>", "g", str)
     tmp_str = gensub(/\\$/, "<br>", "g", tmp_str)
-
-
-    # インラインコードは他のインライン要素より優先して保護する
-    delete inline_code_ph
-    inline_code_ph_count = 0
-    while (match(tmp_str, /`[^`]+`/)) {
-        inline_code_ph_count++
-        inline_code_ph[inline_code_ph_count] = escape_html(substr(tmp_str, RSTART + 1, RLENGTH - 2))
-        tmp_str = substr(tmp_str, 1, RSTART - 1) codeph_sep inline_code_ph_count codeph_sep substr(tmp_str, RSTART + RLENGTH)
-    }
 
     # 強調処理 (通常・行頭・行末)
     # アスタリスクは前後空白なしを許容
@@ -691,7 +635,7 @@ function parse_span_elements(str,      tmp_str, output_str, link_href_and_title,
     tmp_str = gensub(/`([^`]+)`/, "<code>\\1</code>", "g", tmp_str)
 
     # 画像埋め込み記法の処理
-    tmp_str = gensub(/!\[([^\]]*)\]\(([^ )]+)( ?['"]([^\)]+)['"])*\)/, "<img src=\"\\2\" alt=\"\\1\" title=\"\\4\">", "g", tmp_str)
+    tmp_str = gensub(/!\[([^\]]*)\]\(([^ ]+)( ?['"]([^\)]+)['"])*\)/, "<img src=\"\\2\" alt=\"\\1\" title=\"\\4\">", "g", tmp_str)
     # title属性の指定がない場合は、title属性の定義を消去する
     tmp_str = gensub(/ title=""/, "", "g", tmp_str)
 
@@ -704,32 +648,10 @@ function parse_span_elements(str,      tmp_str, output_str, link_href_and_title,
     # 脚注記法のための準備
     tmp_str = gensub(/\[\^([^\]]+)\]/, footnote_sep "\\1" footnote_sep, "g", tmp_str)
 
-    # 定義参照型画像埋め込み指定のための準備（識別子省略時はalt文字列を採用）
-    while (match(tmp_str, /!\[[^\]]+\]\[[^\]]*\]/)) {
-        raw = substr(tmp_str, RSTART, RLENGTH)
-        alt = gensub(/^!\[([^\]]+)\]\[[^\]]*\]$/, "\\1", 1, raw)
-        label = gensub(/^!\[[^\]]+\]\[([^\]]*)\]$/, "\\1", 1, raw)
-        if (label == "") { label = alt }
-        label = normalize_ref_label(label)
-        repl = refimg_start_sep alt "\005" label refimg_end_sep
-        tmp_str = substr(tmp_str, 1, RSTART - 1) repl substr(tmp_str, RSTART + RLENGTH)
-    }
-
-    # 定義参照リンク生成のための準備（識別子省略時はリンク文字列を採用）
-    while (match(tmp_str, /\[[^\]]+\]\[[^\]]*\]/)) {
-        raw = substr(tmp_str, RSTART, RLENGTH)
-        txt = gensub(/^\[([^\]]+)\]\[[^\]]*\]$/, "\\1", 1, raw)
-        label = gensub(/^\[[^\]]+\]\[([^\]]*)\]$/, "\\1", 1, raw)
-        if (label == "") { label = txt }
-        label = normalize_ref_label(label)
-        repl = reflink_start_sep txt "\005" label reflink_end_sep
-        tmp_str = substr(tmp_str, 1, RSTART - 1) repl substr(tmp_str, RSTART + RLENGTH)
-    }
-
-    # 保護していたインラインコードを復元
-    for (i = 1; i <= inline_code_ph_count; i++) {
-        gsub(codeph_sep i codeph_sep, "<code>" inline_code_ph[i] "</code>", tmp_str)
-    }
+    # 定義参照型画像埋め込み指定のための準備
+    tmp_str = gensub(/!\[([^\]]+)\]\[([^\]]*)\]/, refimg_sep "\\1\005\\2" refimg_sep, "g", tmp_str)
+    # 定義参照リンク生成のための準備
+    tmp_str = gensub(/\[([^\]]+)\]\[([^\]]*)\]/, reflink_sep "\\1\005\\2" reflink_sep, "g", tmp_str)
 
     output_str = tmp_str
 
@@ -737,7 +659,7 @@ function parse_span_elements(str,      tmp_str, output_str, link_href_and_title,
 }
 
 # テーブル記法の処理
-function process_table(       eof_status, tmp_line, output_th, output_table_array, output_table, output_count, row_mode, alignment_attr_str, i, j, k) {
+function process_table(       eof_status, tmp_line, output_th, output_table_array, output_table, output_count, row_mode, alignment_attr_str, i) {
     # 処理モード (th, td)
     row_mode = "th"
     # 各列の揃え位置を設定するHTMLのstyle属性
@@ -830,7 +752,7 @@ function close_tag_if_necessary() {
 }
 
 # 文書末に脚注を出力する
-function output_footnote(      footnote_list_array, footnote_key_array, footnote_output_array, footnote_output_array_count, footnote_output_str, i) {
+function output_footnote(      footnote_list_array, footnote_key_array, footnote_output_array, footnote_output_array_count, footnote_output_str) {
     # 脚注が存在しない場合は何も出力せずに終了
     if (footnote_count == 0) { return "" }
 

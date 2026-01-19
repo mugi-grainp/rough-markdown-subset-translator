@@ -9,6 +9,12 @@ Translate Markdown to HTML.
 This script supports most major Markdown syntax. However, there are some that
 cannot be converted correctly depending on how they are written.
 
+## Script Improvement (2026.01.19)
+
+To reduce instances of failed complex Markdown conversions, we improved the script using ChatGPT.
+`markdown-subset-translator.awk` is the improved version of the script.
+The original version of the script remains available as `markdown-subset-translator.original.awk`.
+
 ## Syntax supported by this script
 
 ### Basic syntax
@@ -48,7 +54,7 @@ This program outputs other than the above syntax and HTML tags as is.
 
 ## Usage
 
-Run `markdown-subset-translator.awk`.
+Run `markdown-subset-translator.awk`. Note that since the script uses `gensub` as a substitution function, it can only be processed with GNU Awk (gawk).
 
 ```bash
 awk -f markdown-subset-translator.awk [FILE]
