@@ -37,6 +37,7 @@ BEGIN {
     #    5  inside of code block
     #    6  inside of blockquote
     #    7  inside of table block
+    #    8  processing footnote
     block = 0
     # ブロックの深さ
     block_elements_depth = 0
@@ -368,10 +369,13 @@ $0 ~ re_ol_top {
 # 角括弧内の冒頭が ^ (ハット) であるものを脚注記法とする
 # ===============================================================
 /^\[\^.+\]: +.+/ {
-    fkey = gensub(/^\[\^([^\]]+)\]: +.+/, "\\1", 1, $0)
-    if (!(fkey in footnote_order)) {
-        footnote_text[fkey] = parse_span_elements(gensub(/^\[[^\]]+\]: +([^ ]+)/, "\\1", 1, $0))
-    }
+    # 処理中の最後の要素について必要に応じ閉じタグを出力する
+    close_tag_if_necessary()
+
+    # 脚注記法処理モードに入る
+    block = 8
+    process_footnote()
+    block = 0
     next
 }
 
@@ -807,6 +811,31 @@ function process_table(       eof_status, tmp_line, output_th, output_table_arra
     # 最終行（</table>タグ）は改行を付けない
     output_table = output_table output_table_array[output_count]
     return output_table
+}
+
+# 脚注記法の処理
+function process_footnote(    line, eof_status, footnote_key, footnote_text_piece) {
+    footnote_key = gensub(/^\[\^([^\]]+)\]: +.+/, "\\1", 1, $0)
+    footnote_text_piece = gensub(/^\[[^\]]+\]: +([^ ]+)/, "\\1", 1, $0)
+
+    while(1) {
+        if (!(footnote_key in footnote_order)) {
+            footnote_text[footnote_key] = footnote_text[footnote_key] parse_span_elements(footnote_text_piece)
+        }
+
+        eof_status = getline
+        if (eof_status == 0) { break }
+        if ($0 == "") { break }
+
+        if ($0 ~ /^\[\^([^\]]+)\]: +.+/) {
+            # 次の脚注の始まり
+            footnote_key = gensub(/^\[\^([^\]]+)\]: +.+/, "\\1", 1, $0)
+            footnote_text_piece = gensub(/^\[[^\]]+\]: +([^ ]+)/, "\\1", 1, $0)
+        } else {
+            # 現在の脚注の2行目以降
+            footnote_text_piece = gensub(/^ +/, "", 1, $0)
+        }
+    }
 }
 
 # 必要に応じ、閉じタグを出力する
